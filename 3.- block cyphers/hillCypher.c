@@ -23,15 +23,14 @@ int letra_a_numero(const char *letra, const char *alfabeto[], int longitud);
 const char *numero_a_letra(int numero, const char *alfabeto[], int longitud);
 
 // Prototipos para funciones de procesamiento de texto y matrices
-void texto_a_matriz_numerica(const char *texto, int n, int matriz[10][10], const char *alfabeto[], int longitud);
-void imprimir_matriz_numerica(int n, int matriz[10][10]);
-void imprimir_matriz_alfabetica(int n, int matriz[10][10], const char *alfabeto[], int longitud);
+void texto_a_matriz_numerica(const char *texto, int n, int **matriz, const char *alfabeto[], int longitud);
+void imprimir_matriz_numerica(int n, int **matriz);
+void imprimir_matriz_alfabetica(int n, int **matriz, const char *alfabeto[], int longitud);
 void encrypt_message();
-int dividir_texto_en_bloques(const char *texto, int rows, int cols, int bloques[100][10][10], const char *alfabeto[], int longitud);
-void multiplicar_matrices_mod(int rows_a, int cols_a, int cols_b, int A[10][10], int B[10][10], int C[10][10], int mod_n);
-void cifrar_mensaje(int block_rows, int block_cols, int num_blocks, int key_matrix[10][10], int plaintext_blocks[100][10][10],
-                    int ciphertext_blocks[100][10][10], int mod_n);
-void matrices_a_texto(int block_rows, int block_cols, int num_blocks, int matrices[100][10][10], char *texto, const char *alfabeto[], int longitud);
+int dividir_texto_en_bloques(const char *texto, int rows, int cols, int ***bloques, const char *alfabeto[], int longitud);
+void multiplicar_matrices_mod(int rows_a, int cols_a, int cols_b, int **A, int **B, int **C, int mod_n);
+void cifrar_mensaje(int block_rows, int block_cols, int num_blocks, int **key_matrix, int ***plaintext_blocks, int ***ciphertext_blocks, int mod_n);
+void matrices_a_texto(int block_rows, int block_cols, int num_blocks, int ***matrices, char *texto, const char *alfabeto[], int longitud);
 
 // Prototipos de funciones para operaciones aritméticas básicas
 int gcd(int a, int b);
@@ -56,18 +55,81 @@ Frac divf(Frac a, Frac b);
 void print_frac(Frac f);
 void print_frac_mod(Frac f, int n);
 
-// Prototipos para operaciones con matrices
-Frac determinant(int n, Frac mat[n][n]);
-int determinant_mod(int n, Frac mat[n][n], int mod_n);
-int invert_matrix(int n, Frac mat[n][n], Frac result[n][n]);
-int apply_modulo_to_matrix(int n, Frac mat[n][n], Frac result[n][n], int mod_n);
-void inverse_matrix(int n, Frac mat[n][n], int mod_n);
+// Prototipos para operaciones con matrices de fracciones
+Frac determinant(int n, Frac **mat);
+int determinant_mod(int n, Frac **mat, int mod_n);
+int invert_matrix(int n, Frac **mat, Frac **result);
+int apply_modulo_to_matrix(int n, Frac **mat, Frac **result, int mod_n);
+void inverse_matrix(int n, Frac **mat, int mod_n);
 void calculate_inverse_matrix();
 
-// Prototipos para encriptación/desencriptación
+// Prototipos para cifrado y descifrado
 void decrypt_message();
-int calculate_inverse_key(int n, int key_matrix[10][10], int inverse_key[10][10], int mod_n);
-int generate_valid_key(int n, int key_matrix[10][10], int mod_n);
+int calculate_inverse_key(int n, int **key_matrix, int **inverse_key, int mod_n);
+int generate_valid_key(int n, int **key_matrix, int mod_n);
+
+// Función de utilidad para alocar memoria para una matriz
+int **allocate_matrix(int rows, int cols)
+{
+    int **matrix = (int **)malloc(rows * sizeof(int *));
+    for (int i = 0; i < rows; i++)
+    {
+        matrix[i] = (int *)malloc(cols * sizeof(int));
+    }
+    return matrix;
+}
+
+// Función de utilidad para liberar memoria de una matriz
+void free_matrix(int **matrix, int rows)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        free(matrix[i]);
+    }
+    free(matrix);
+}
+
+// Función de utilidad para alocar memoria para una matriz de fracciones
+Frac **allocate_frac_matrix(int rows, int cols)
+{
+    Frac **matrix = (Frac **)malloc(rows * sizeof(Frac *));
+    for (int i = 0; i < rows; i++)
+    {
+        matrix[i] = (Frac *)malloc(cols * sizeof(Frac));
+    }
+    return matrix;
+}
+
+// Función de utilidad para liberar memoria de una matriz de fracciones
+void free_frac_matrix(Frac **matrix, int rows)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        free(matrix[i]);
+    }
+    free(matrix);
+}
+
+// Función de utilidad para alocar memoria para un arreglo 3D de matrices
+int ***allocate_block_matrices(int num_blocks, int rows, int cols)
+{
+    int ***blocks = (int ***)malloc(num_blocks * sizeof(int **));
+    for (int b = 0; b < num_blocks; b++)
+    {
+        blocks[b] = allocate_matrix(rows, cols);
+    }
+    return blocks;
+}
+
+// Función de utilidad para liberar memoria de un arreglo 3D de matrices
+void free_block_matrices(int ***blocks, int num_blocks, int rows)
+{
+    for (int b = 0; b < num_blocks; b++)
+    {
+        free_matrix(blocks[b], rows);
+    }
+    free(blocks);
+}
 
 int main()
 {
@@ -135,7 +197,7 @@ const char *numero_a_letra(int numero, const char *alfabeto[], int longitud)
 }
 
 // Función para dividir el texto en bloques
-int dividir_texto_en_bloques(const char *texto, int rows, int cols, int bloques[100][10][10], const char *alfabeto[], int longitud)
+int dividir_texto_en_bloques(const char *texto, int rows, int cols, int ***bloques, const char *alfabeto[], int longitud)
 {
     int num_blocks = 0;
     int i = 0; // Índice para el texto
@@ -215,7 +277,7 @@ int dividir_texto_en_bloques(const char *texto, int rows, int cols, int bloques[
 }
 
 // Función para convertir texto a matriz numérica según el alfabeto
-void texto_a_matriz_numerica(const char *texto, int n, int matriz[10][10], const char *alfabeto[], int longitud)
+void texto_a_matriz_numerica(const char *texto, int n, int **matriz, const char *alfabeto[], int longitud)
 {
     int i = 0;             // Índice para texto
     int fila = 0, col = 0; // Índices para la matriz
@@ -270,7 +332,7 @@ void texto_a_matriz_numerica(const char *texto, int n, int matriz[10][10], const
 }
 
 // Función para imprimir una matriz numérica
-void imprimir_matriz_numerica(int n, int matriz[10][10])
+void imprimir_matriz_numerica(int n, int **matriz)
 {
     for (int i = 0; i < n; i++)
     {
@@ -283,7 +345,7 @@ void imprimir_matriz_numerica(int n, int matriz[10][10])
 }
 
 // Función para imprimir una matriz en formato alfabético
-void imprimir_matriz_alfabetica(int n, int matriz[10][10], const char *alfabeto[], int longitud)
+void imprimir_matriz_alfabetica(int n, int **matriz, const char *alfabeto[], int longitud)
 {
     for (int i = 0; i < n; i++)
     {
@@ -302,7 +364,7 @@ void calculate_inverse_matrix()
     printf("Ingrese el tamanio de la matriz cuadrada (n x n): ");
     scanf("%d", &n);
 
-    Frac mat[n][n];
+    Frac **mat = allocate_frac_matrix(n, n);
     printf("Ingrese los elementos de la matriz (%d x %d):\n", n, n);
     for (int i = 0; i < n; i++)
     {
@@ -319,10 +381,12 @@ void calculate_inverse_matrix()
     scanf("%d", &mod_n);
 
     inverse_matrix(n, mat, mod_n);
+
+    free_frac_matrix(mat, n);
 }
 
 // Función para multiplicar dos matrices y aplicar módulo n
-void multiplicar_matrices_mod(int rows_a, int cols_a, int cols_b, int A[10][10], int B[10][10], int C[10][10], int mod_n)
+void multiplicar_matrices_mod(int rows_a, int cols_a, int cols_b, int **A, int **B, int **C, int mod_n)
 {
     int i, j, k;
 
@@ -355,8 +419,8 @@ void multiplicar_matrices_mod(int rows_a, int cols_a, int cols_b, int A[10][10],
 }
 
 // Función para cifrar todos los bloques del mensaje
-void cifrar_mensaje(int block_rows, int block_cols, int num_blocks, int key_matrix[10][10], int plaintext_blocks[100][10][10],
-                    int ciphertext_blocks[100][10][10], int mod_n)
+void cifrar_mensaje(int block_rows, int block_cols, int num_blocks, int **key_matrix, int ***plaintext_blocks,
+                    int ***ciphertext_blocks, int mod_n)
 {
     // Para cada bloque del mensaje
     for (int b = 0; b < num_blocks; b++)
@@ -367,7 +431,7 @@ void cifrar_mensaje(int block_rows, int block_cols, int num_blocks, int key_matr
 }
 
 // Función para convertir matrices numéricas a texto
-void matrices_a_texto(int block_rows, int block_cols, int num_blocks, int matrices[100][10][10], char *texto, const char *alfabeto[], int longitud)
+void matrices_a_texto(int block_rows, int block_cols, int num_blocks, int ***matrices, char *texto, const char *alfabeto[], int longitud)
 {
     int pos = 0;
 
@@ -526,7 +590,7 @@ void print_frac_mod(Frac f, int n)
 // =============================================================================
 
 // Optimización de determinant para matrices grandes
-Frac determinant(int n, Frac mat[n][n])
+Frac determinant(int n, Frac **mat)
 {
     // Casos base
     if (n == 1)
@@ -549,7 +613,7 @@ Frac determinant(int n, Frac mat[n][n])
             continue; // Saltar cálculos innecesarios
 
         // Crear submatriz más eficientemente
-        Frac submat[n - 1][n - 1];
+        Frac **submat = allocate_frac_matrix(n - 1, n - 1);
         available[j] = 0; // Marcar esta columna como usada
 
         for (int i = 1; i < n; i++)
@@ -575,6 +639,8 @@ Frac determinant(int n, Frac mat[n][n])
 
         // Sumar al determinante
         det = add(det, mul(mat[0][j], cofactor));
+
+        free_frac_matrix(submat, n - 1);
     }
 
     free(available);
@@ -582,10 +648,10 @@ Frac determinant(int n, Frac mat[n][n])
 }
 
 // Mejora en el cálculo del determinante modular
-int determinant_mod(int n, Frac mat[n][n], int mod_n)
+int determinant_mod(int n, Frac **mat, int mod_n)
 {
     // Para matrices grandes, primero reducir todos los elementos módulo mod_n
-    Frac mod_mat[n][n];
+    Frac **mod_mat = allocate_frac_matrix(n, n);
     for (int i = 0; i < n; i++)
     {
         for (int j = 0; j < n; j++)
@@ -597,6 +663,7 @@ int determinant_mod(int n, Frac mat[n][n], int mod_n)
             int inv_den = mod_inverse(den, mod_n);
             if (inv_den == -1)
             {
+                free_frac_matrix(mod_mat, n);
                 return -1; // No existe inverso multiplicativo
             }
 
@@ -607,15 +674,17 @@ int determinant_mod(int n, Frac mat[n][n], int mod_n)
     // Calcular determinante de la matriz ya reducida en módulo mod_n
     Frac det = determinant(n, mod_mat);
 
+    free_frac_matrix(mod_mat, n);
+
     // Como todos los elementos ya están en módulo mod_n con denominador 1,
     // el determinante también tendrá denominador 1
     return mod(det.num, mod_n);
 }
 
 // Invierte una matriz sin aplicar módulo
-int invert_matrix(int n, Frac mat[n][n], Frac result[n][n])
+int invert_matrix(int n, Frac **mat, Frac **result)
 {
-    Frac aug[n][2 * n];
+    Frac **aug = allocate_frac_matrix(n, 2 * n);
 
     // Crear la matriz aumentada [mat | I]
     for (int i = 0; i < n; i++)
@@ -647,6 +716,7 @@ int invert_matrix(int n, Frac mat[n][n], Frac result[n][n])
             }
             if (swap == -1)
             {
+                free_frac_matrix(aug, n);
                 return 0; // La matriz no tiene inversa
             }
             for (int k = 0; k < 2 * n; k++)
@@ -686,11 +756,12 @@ int invert_matrix(int n, Frac mat[n][n], Frac result[n][n])
         }
     }
 
+    free_frac_matrix(aug, n);
     return 1; // Éxito
 }
 
 // Aplica módulo n a una matriz
-int apply_modulo_to_matrix(int n, Frac mat[n][n], Frac result[n][n], int mod_n)
+int apply_modulo_to_matrix(int n, Frac **mat, Frac **result, int mod_n)
 {
     for (int i = 0; i < n; i++)
     {
@@ -719,7 +790,7 @@ int apply_modulo_to_matrix(int n, Frac mat[n][n], Frac result[n][n], int mod_n)
 }
 
 // Función principal que calcula la inversa modular de una matriz
-void inverse_matrix(int n, Frac mat[n][n], int mod_n)
+void inverse_matrix(int n, Frac **mat, int mod_n)
 {
     // Calcular y mostrar el determinante
     int det = determinant_mod(n, mat, mod_n);
@@ -735,13 +806,15 @@ void inverse_matrix(int n, Frac mat[n][n], int mod_n)
     }
 
     printf("Determinante (mod %d): %d\n", mod_n, det);
-    Frac inv_mat[n][n];
-    Frac mod_mat[n][n];
+    Frac **inv_mat = allocate_frac_matrix(n, n);
+    Frac **mod_mat = allocate_frac_matrix(n, n);
 
     // Paso 1: Invertir la matriz
     if (!invert_matrix(n, mat, inv_mat))
     {
         printf("La matriz no tiene inversa.\n");
+        free_frac_matrix(inv_mat, n);
+        free_frac_matrix(mod_mat, n);
         return;
     }
 
@@ -761,6 +834,8 @@ void inverse_matrix(int n, Frac mat[n][n], int mod_n)
     if (!apply_modulo_to_matrix(n, inv_mat, mod_mat, mod_n))
     {
         printf("No existe el inverso multiplicativo del denominador.\n");
+        free_frac_matrix(inv_mat, n);
+        free_frac_matrix(mod_mat, n);
         return;
     }
 
@@ -775,6 +850,9 @@ void inverse_matrix(int n, Frac mat[n][n], int mod_n)
         }
         printf("\n");
     }
+
+    free_frac_matrix(inv_mat, n);
+    free_frac_matrix(mod_mat, n);
 }
 
 // Función para descifrar un mensaje usando el cifrado Hill
@@ -787,10 +865,10 @@ void decrypt_message()
     int block_rows; // Número de filas por bloque
     char ciphertext[1000];
     char key_text[1000];
-    int key_matrix[10][10] = {0};             // Matriz clave
-    int inverse_key[10][10] = {0};            // Matriz clave inversa
-    int ciphertext_blocks[100][10][10] = {0}; // Para almacenar los bloques del mensaje cifrado
-    int plaintext_blocks[100][10][10] = {0};  // Para almacenar los bloques del mensaje descifrado
+    int **key_matrix;         // Matriz clave
+    int **inverse_key;        // Matriz clave inversa
+    int ***ciphertext_blocks; // Para almacenar los bloques del mensaje cifrado
+    int ***plaintext_blocks;  // Para almacenar los bloques del mensaje descifrado
     int num_blocks = 0;
     char decrypted_text[1000] = {0}; // Texto descifrado
 
@@ -833,6 +911,10 @@ void decrypt_message()
         return;
     }
 
+    // Asignar memoria para matrices de clave
+    key_matrix = allocate_matrix(block_cols, block_cols);
+    inverse_key = allocate_matrix(block_cols, block_cols);
+
     // 2.1. Solicitar número de filas por bloque para el mensaje
     printf("Ingrese el número de filas por bloque para el mensaje: ");
     scanf("%d", &block_rows);
@@ -842,6 +924,8 @@ void decrypt_message()
     if (block_rows <= 0 || block_rows > 10)
     {
         printf("Error: El número de filas por bloque debe estar entre 1 y 10.\n");
+        free_matrix(key_matrix, block_cols);
+        free_matrix(inverse_key, block_cols);
         return;
     }
 
@@ -857,6 +941,15 @@ void decrypt_message()
 
     // 5. Convertir la clave a matriz numérica
     texto_a_matriz_numerica(key_text, block_cols, key_matrix, alfabeto, longitud_alfabeto);
+
+    // Asignar memoria para los bloques
+    ciphertext_blocks = (int ***)malloc(100 * sizeof(int **));
+    plaintext_blocks = (int ***)malloc(100 * sizeof(int **));
+    for (int b = 0; b < 100; b++)
+    {
+        ciphertext_blocks[b] = allocate_matrix(block_rows, block_cols);
+        plaintext_blocks[b] = allocate_matrix(block_rows, block_cols);
+    }
 
     // 6. Convertir el mensaje cifrado en bloques
     num_blocks = dividir_texto_en_bloques(ciphertext, block_rows, block_cols, ciphertext_blocks, alfabeto, longitud_alfabeto);
@@ -883,6 +976,15 @@ void decrypt_message()
     if (!calculate_inverse_key(block_cols, key_matrix, inverse_key, longitud_alfabeto))
     {
         printf("No se puede descifrar: la matriz clave no tiene inversa módulo %d.\n", longitud_alfabeto);
+        free_matrix(key_matrix, block_cols);
+        free_matrix(inverse_key, block_cols);
+        for (int b = 0; b < 100; b++)
+        {
+            free_matrix(ciphertext_blocks[b], block_rows);
+            free_matrix(plaintext_blocks[b], block_rows);
+        }
+        free(ciphertext_blocks);
+        free(plaintext_blocks);
         return;
     }
 
@@ -971,13 +1073,25 @@ void decrypt_message()
     // 15. Mostrar el texto descifrado
     printf("\n=== TEXTO DESCIFRADO ===\n");
     printf("%s\n", decrypted_text);
+
+    // Liberar memoria
+    free_matrix(key_matrix, block_cols);
+    free_matrix(inverse_key, block_cols);
+
+    for (int b = 0; b < 100; b++)
+    {
+        free_matrix(ciphertext_blocks[b], block_rows);
+        free_matrix(plaintext_blocks[b], block_rows);
+    }
+    free(ciphertext_blocks);
+    free(plaintext_blocks);
 }
 
 // Función para calcular la inversa de la matriz clave modulo n
-int calculate_inverse_key(int n, int key_matrix[10][10], int inverse_key[10][10], int mod_n)
+int calculate_inverse_key(int n, int **key_matrix, int **inverse_key, int mod_n)
 {
     // Convertir la matriz de enteros a matriz de fracciones
-    Frac mat[n][n];
+    Frac **mat = allocate_frac_matrix(n, n);
     for (int i = 0; i < n; i++)
     {
         for (int j = 0; j < n; j++)
@@ -990,20 +1104,26 @@ int calculate_inverse_key(int n, int key_matrix[10][10], int inverse_key[10][10]
     int det = determinant_mod(n, mat, mod_n);
     if (det == 0 || det == -1)
     {
+        free_frac_matrix(mat, n);
         return 0; // No existe inversa
     }
 
     // Calcular la matriz inversa
-    Frac inv_mat[n][n];
+    Frac **inv_mat = allocate_frac_matrix(n, n);
     if (!invert_matrix(n, mat, inv_mat))
     {
+        free_frac_matrix(mat, n);
+        free_frac_matrix(inv_mat, n);
         return 0; // No se pudo invertir la matriz
     }
 
     // Aplicar módulo a la matriz inversa
-    Frac mod_mat[n][n];
+    Frac **mod_mat = allocate_frac_matrix(n, n);
     if (!apply_modulo_to_matrix(n, inv_mat, mod_mat, mod_n))
     {
+        free_frac_matrix(mat, n);
+        free_frac_matrix(inv_mat, n);
+        free_frac_matrix(mod_mat, n);
         return 0; // No existe inverso multiplicativo para algún denominador
     }
 
@@ -1016,11 +1136,14 @@ int calculate_inverse_key(int n, int key_matrix[10][10], int inverse_key[10][10]
         }
     }
 
+    free_frac_matrix(mat, n);
+    free_frac_matrix(inv_mat, n);
+    free_frac_matrix(mod_mat, n);
     return 1; // Éxito
 }
 
 // Función para generar una matriz clave válida (con inversa mod n)
-int generate_valid_key(int n, int key_matrix[10][10], int mod_n)
+int generate_valid_key(int n, int **key_matrix, int mod_n)
 {
     // Usar time como semilla para números aleatorios
     srand(time(NULL));
@@ -1040,7 +1163,7 @@ int generate_valid_key(int n, int key_matrix[10][10], int mod_n)
         }
 
         // Verificar si la matriz tiene inversa (det != 0 y gcd(det, mod_n) = 1)
-        Frac mat[n][n];
+        Frac **mat = allocate_frac_matrix(n, n);
         for (int i = 0; i < n; i++)
         {
             for (int j = 0; j < n; j++)
@@ -1050,6 +1173,8 @@ int generate_valid_key(int n, int key_matrix[10][10], int mod_n)
         }
 
         int det = determinant_mod(n, mat, mod_n);
+        free_frac_matrix(mat, n);
+
         if (det != 0 && det != -1)
         {
             // La matriz tiene inversa
@@ -1072,8 +1197,8 @@ void encrypt_message()
     int block_rows; // Número de filas por bloque
     char plaintext[1000];
     char key_text[1000];
-    int key_matrix[10][10] = {0};            // Inicializar con ceros
-    int plaintext_blocks[100][10][10] = {0}; // Para almacenar los bloques del mensaje
+    int **key_matrix;        // Matriz clave
+    int ***plaintext_blocks; // Para almacenar los bloques del mensaje
     int num_blocks = 0;
     int opcion_clave;
 
@@ -1116,6 +1241,9 @@ void encrypt_message()
         return;
     }
 
+    // Asignar memoria para la matriz clave
+    key_matrix = allocate_matrix(block_cols, block_cols);
+
     // 2.1. Solicitar número de filas por bloque para el mensaje
     printf("Ingrese el número de filas por bloque para el mensaje: ");
     scanf("%d", &block_rows);
@@ -1125,6 +1253,7 @@ void encrypt_message()
     if (block_rows <= 0 || block_rows > 10)
     {
         printf("Error: El número de filas por bloque debe estar entre 1 y 10.\n");
+        free_matrix(key_matrix, block_cols);
         return;
     }
 
@@ -1167,6 +1296,7 @@ void encrypt_message()
         else
         {
             printf("Error al generar una clave válida. Por favor, inténtelo de nuevo.\n");
+            free_matrix(key_matrix, block_cols);
             return;
         }
     }
@@ -1181,7 +1311,7 @@ void encrypt_message()
         texto_a_matriz_numerica(key_text, block_cols, key_matrix, alfabeto, longitud_alfabeto);
 
         // Verificar que la clave sea válida (tenga inversa)
-        Frac mat[block_cols][block_cols];
+        Frac **mat = allocate_frac_matrix(block_cols, block_cols);
         for (int i = 0; i < block_cols; i++)
         {
             for (int j = 0; j < block_cols; j++)
@@ -1191,10 +1321,13 @@ void encrypt_message()
         }
 
         int det = determinant_mod(block_cols, mat, longitud_alfabeto);
+        free_frac_matrix(mat, block_cols);
+
         if (det == 0 || det == -1)
         {
             printf("La clave ingresada no es válida (no tiene inversa módulo %d).\n", longitud_alfabeto);
             printf("Por favor, intente con otra clave.\n");
+            free_matrix(key_matrix, block_cols);
             return;
         }
     }
@@ -1203,6 +1336,13 @@ void encrypt_message()
     printf("Ingrese el mensaje a cifrar: ");
     fgets(plaintext, sizeof(plaintext), stdin);
     plaintext[strcspn(plaintext, "\n")] = '\0'; // Eliminar salto de línea
+
+    // Asignar memoria para bloques
+    plaintext_blocks = (int ***)malloc(100 * sizeof(int **));
+    for (int b = 0; b < 100; b++)
+    {
+        plaintext_blocks[b] = allocate_matrix(block_rows, block_cols);
+    }
 
     // 5. Convertir el mensaje en bloques (la clave ya está convertida)
     num_blocks = dividir_texto_en_bloques(plaintext, block_rows, block_cols, plaintext_blocks, alfabeto, longitud_alfabeto);
@@ -1261,7 +1401,11 @@ void encrypt_message()
     printf("\n=== PROCESO DE CIFRADO ===\n");
 
     // Arreglos para almacenar el mensaje cifrado
-    int ciphertext_blocks[100][10][10] = {0};
+    int ***ciphertext_blocks = (int ***)malloc(100 * sizeof(int **));
+    for (int b = 0; b < 100; b++)
+    {
+        ciphertext_blocks[b] = allocate_matrix(block_rows, block_cols);
+    }
     char ciphertext[1000] = {0};
 
     // Cifrar cada bloque del mensaje
@@ -1305,4 +1449,15 @@ void encrypt_message()
     // 14. Mostrar el texto cifrado
     printf("\n=== TEXTO CIFRADO ===\n");
     printf("%s\n", ciphertext);
+
+    // Liberar la memoria
+    free_matrix(key_matrix, block_cols);
+
+    for (int b = 0; b < 100; b++)
+    {
+        free_matrix(plaintext_blocks[b], block_rows);
+        free_matrix(ciphertext_blocks[b], block_rows);
+    }
+    free(plaintext_blocks);
+    free(ciphertext_blocks);
 }
