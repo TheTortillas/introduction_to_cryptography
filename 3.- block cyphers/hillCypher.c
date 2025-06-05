@@ -17,29 +17,12 @@ const char *alfabeto_en[26] = {
     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
 
 // Función para obtener el índice de una letra en el alfabeto
-int letra_a_numero(const char *letra, const char *alfabeto[], int longitud)
-{
-    for (int i = 0; i < longitud; i++)
-    {
-        if (strcmp(letra, alfabeto[i]) == 0)
-        {
-            return i;
-        }
-    }
-    return -1;
-}
+int letra_a_numero(const char *letra, const char *alfabeto[], int longitud);
 
 // Función para convertir un número a letra según el alfabeto
-const char *numero_a_letra(int numero, const char *alfabeto[], int longitud)
-{
-    if (numero >= 0 && numero < longitud)
-    {
-        return alfabeto[numero];
-    }
-    return "?";
-}
+const char *numero_a_letra(int numero, const char *alfabeto[], int longitud);
 
-// Prototipos para nuevas funciones
+// Prototipos para funciones de procesamiento de texto y matrices
 void texto_a_matriz_numerica(const char *texto, int n, int matriz[10][10], const char *alfabeto[], int longitud);
 void imprimir_matriz_numerica(int n, int matriz[10][10]);
 void imprimir_matriz_alfabetica(int n, int matriz[10][10], const char *alfabeto[], int longitud);
@@ -81,7 +64,7 @@ int apply_modulo_to_matrix(int n, Frac mat[n][n], Frac result[n][n], int mod_n);
 void inverse_matrix(int n, Frac mat[n][n], int mod_n);
 void calculate_inverse_matrix();
 
-// Add new prototypes
+// Prototipos para encriptación/desencriptación
 void decrypt_message();
 int calculate_inverse_key(int n, int key_matrix[10][10], int inverse_key[10][10], int mod_n);
 int generate_valid_key(int n, int key_matrix[10][10], int mod_n);
@@ -128,249 +111,27 @@ int main()
     return 0;
 }
 
-// Función para cifrar un mensaje usando el cifrado Hill
-void encrypt_message()
+// Función para obtener el índice de una letra en el alfabeto
+int letra_a_numero(const char *letra, const char *alfabeto[], int longitud)
 {
-    int opcion_alfabeto;
-    const char **alfabeto;
-    int longitud_alfabeto;
-    int block_cols; // Tamaño de la matriz de clave (NxN) y número de columnas por bloque
-    int block_rows; // Número de filas por bloque
-    char plaintext[1000];
-    char key_text[1000];
-    int key_matrix[10][10] = {0};            // Inicializar con ceros
-    int plaintext_blocks[100][10][10] = {0}; // Para almacenar los bloques del mensaje
-    int num_blocks = 0;
-    int opcion_clave;
-
-    // 1. Seleccionar el alfabeto
-    printf("Seleccione el alfabeto:\n");
-    printf("1. Español (incluye ñ, 27 caracteres)\n");
-    printf("2. Inglés (26 caracteres)\n");
-    printf("Opción: ");
-    scanf("%d", &opcion_alfabeto);
-    getchar(); // Consumir salto de línea
-
-    if (opcion_alfabeto == 1)
+    for (int i = 0; i < longitud; i++)
     {
-        alfabeto = alfabeto_es;
-        longitud_alfabeto = 27;
-        printf("Alfabeto español seleccionado (módulo %d).\n", longitud_alfabeto);
-    }
-    else if (opcion_alfabeto == 2)
-    {
-        alfabeto = alfabeto_en;
-        longitud_alfabeto = 26;
-        printf("Alfabeto inglés seleccionado (módulo %d).\n", longitud_alfabeto);
-    }
-    else
-    {
-        printf("Opción inválida. Se usará el alfabeto inglés por defecto.\n");
-        alfabeto = alfabeto_en;
-        longitud_alfabeto = 26;
-    }
-
-    // 2. Solicitar tamaño de la matriz clave (que es cuadrada NxN)
-    printf("Ingrese el tamaño de la matriz clave (n x n): ");
-    scanf("%d", &block_cols);
-    getchar(); // Consumir salto de línea
-
-    // Validar el tamaño de la clave
-    if (block_cols <= 0 || block_cols > 10)
-    {
-        printf("Error: El tamaño de la matriz clave debe estar entre 1 y 10.\n");
-        return;
-    }
-
-    // 2.1. Solicitar número de filas por bloque para el mensaje
-    printf("Ingrese el número de filas por bloque para el mensaje: ");
-    scanf("%d", &block_rows);
-    getchar(); // Consumir salto de línea
-
-    // Validar el número de filas por bloque
-    if (block_rows <= 0 || block_rows > 10)
-    {
-        printf("Error: El número de filas por bloque debe estar entre 1 y 10.\n");
-        return;
-    }
-
-    // 3. Preguntar si desea generar una clave válida o introducirla manualmente
-    printf("¿Desea generar una clave válida automáticamente o ingresarla manualmente?\n");
-    printf("1. Generar automáticamente\n");
-    printf("2. Ingresar manualmente\n");
-    printf("Opción: ");
-    scanf("%d", &opcion_clave);
-    getchar(); // Consumir salto de línea
-
-    if (opcion_clave == 1)
-    {
-        // Generar matriz clave válida
-        if (generate_valid_key(block_cols, key_matrix, longitud_alfabeto))
+        if (strcmp(letra, alfabeto[i]) == 0)
         {
-            printf("Se ha generado una clave válida para módulo %d.\n", longitud_alfabeto);
-
-            // Mostrar la clave generada en formato texto
-            printf("Clave generada (numérica): \n");
-            imprimir_matriz_numerica(block_cols, key_matrix);
-
-            printf("Clave generada (alfabética): \n");
-            imprimir_matriz_alfabetica(block_cols, key_matrix, alfabeto, longitud_alfabeto);
-
-            // Crear una representación textual de la clave
-            int pos = 0;
-            for (int i = 0; i < block_cols; i++)
-            {
-                for (int j = 0; j < block_cols; j++)
-                {
-                    const char *letra = numero_a_letra(key_matrix[i][j], alfabeto, longitud_alfabeto);
-                    strcpy(key_text + pos, letra);
-                    pos += strlen(letra);
-                }
-            }
-            key_text[pos] = '\0';
-            printf("Clave generada (texto): %s\n", key_text);
-        }
-        else
-        {
-            printf("Error al generar una clave válida. Por favor, inténtelo de nuevo.\n");
-            return;
+            return i;
         }
     }
-    else
+    return -1;
+}
+
+// Función para convertir un número a letra según el alfabeto
+const char *numero_a_letra(int numero, const char *alfabeto[], int longitud)
+{
+    if (numero >= 0 && numero < longitud)
     {
-        // 3. Solicitar la clave como texto
-        printf("Ingrese la clave (al menos %d caracteres): ", block_cols * block_cols);
-        fgets(key_text, sizeof(key_text), stdin);
-        key_text[strcspn(key_text, "\n")] = '\0'; // Eliminar salto de línea
-
-        // Convertir la clave a matriz numérica
-        texto_a_matriz_numerica(key_text, block_cols, key_matrix, alfabeto, longitud_alfabeto);
-
-        // Verificar que la clave sea válida (tenga inversa)
-        Frac mat[block_cols][block_cols];
-        for (int i = 0; i < block_cols; i++)
-        {
-            for (int j = 0; j < block_cols; j++)
-            {
-                mat[i][j] = frac(key_matrix[i][j], 1);
-            }
-        }
-
-        int det = determinant_mod(block_cols, mat, longitud_alfabeto);
-        if (det == 0 || det == -1)
-        {
-            printf("La clave ingresada no es válida (no tiene inversa módulo %d).\n", longitud_alfabeto);
-            printf("Por favor, intente con otra clave.\n");
-            return;
-        }
+        return alfabeto[numero];
     }
-
-    // 4. Solicitar el mensaje a cifrar
-    printf("Ingrese el mensaje a cifrar: ");
-    fgets(plaintext, sizeof(plaintext), stdin);
-    plaintext[strcspn(plaintext, "\n")] = '\0'; // Eliminar salto de línea
-
-    // 5. Convertir el mensaje en bloques (la clave ya está convertida)
-    num_blocks = dividir_texto_en_bloques(plaintext, block_rows, block_cols, plaintext_blocks, alfabeto, longitud_alfabeto);
-
-    // 7. Mostrar información
-    printf("\n=== INFORMACIÓN DE CIFRADO ===\n");
-    printf("Alfabeto: %s (%d caracteres)\n",
-           opcion_alfabeto == 1 ? "Español" : "Inglés",
-           longitud_alfabeto);
-    printf("Tamaño de la matriz clave: %d x %d\n", block_cols, block_cols);
-    printf("Tamaño de los bloques de mensaje: %d x %d\n", block_rows, block_cols);
-    printf("Clave (texto): %s\n", key_text);
-    printf("Mensaje a cifrar: %s\n", plaintext);
-
-    // 8. Mostrar la matriz clave en formato numérico
-    printf("\n=== MATRIZ CLAVE (NUMÉRICA) ===\n");
-    imprimir_matriz_numerica(block_cols, key_matrix);
-
-    // 9. Mostrar la matriz clave en formato alfabético
-    printf("\n=== MATRIZ CLAVE (ALFABÉTICA) ===\n");
-    imprimir_matriz_alfabetica(block_cols, key_matrix, alfabeto, longitud_alfabeto);
-
-    // 10. Mostrar los bloques del mensaje en formato numérico y alfabético
-    printf("\n======================================================\n");
-    printf("=== BLOQUES DEL MENSAJE A CIFRAR (TOTAL: %d) ===\n", num_blocks);
-    printf("======================================================\n");
-
-    for (int b = 0; b < num_blocks; b++)
-    {
-        printf("\n============= BLOQUE %d DE %d =============\n", b + 1, num_blocks);
-
-        printf("Representación numérica:\n");
-        for (int i = 0; i < block_rows; i++)
-        {
-            for (int j = 0; j < block_cols; j++)
-            {
-                printf("%2d ", plaintext_blocks[b][i][j]);
-            }
-            printf("\n");
-        }
-
-        printf("Representación alfabética:\n");
-        for (int i = 0; i < block_rows; i++)
-        {
-            for (int j = 0; j < block_cols; j++)
-            {
-                printf("%2s ", numero_a_letra(plaintext_blocks[b][i][j], alfabeto, longitud_alfabeto));
-            }
-            printf("\n");
-        }
-
-        printf("==========================================\n");
-    }
-
-    // 11. Realizar el proceso de cifrado
-    printf("\n=== PROCESO DE CIFRADO ===\n");
-
-    // Arreglos para almacenar el mensaje cifrado
-    int ciphertext_blocks[100][10][10] = {0};
-    char ciphertext[1000] = {0};
-
-    // Cifrar cada bloque del mensaje
-    cifrar_mensaje(block_rows, block_cols, num_blocks, key_matrix, plaintext_blocks, ciphertext_blocks, longitud_alfabeto);
-
-    // 12. Mostrar los bloques cifrados
-    printf("\n======================================================\n");
-    printf("=== BLOQUES DEL MENSAJE CIFRADO (TOTAL: %d) ===\n", num_blocks);
-    printf("======================================================\n");
-
-    for (int b = 0; b < num_blocks; b++)
-    {
-        printf("\n============= BLOQUE %d DE %d =============\n", b + 1, num_blocks);
-
-        printf("Representación numérica:\n");
-        for (int i = 0; i < block_rows; i++)
-        {
-            for (int j = 0; j < block_cols; j++)
-            {
-                printf("%2d ", ciphertext_blocks[b][i][j]);
-            }
-            printf("\n");
-        }
-
-        printf("Representación alfabética:\n");
-        for (int i = 0; i < block_rows; i++)
-        {
-            for (int j = 0; j < block_cols; j++)
-            {
-                printf("%2s ", numero_a_letra(ciphertext_blocks[b][i][j], alfabeto, longitud_alfabeto));
-            }
-            printf("\n");
-        }
-
-        printf("==========================================\n");
-    }
-
-    // 13. Convertir los bloques cifrados a texto
-    matrices_a_texto(block_rows, block_cols, num_blocks, ciphertext_blocks, ciphertext, alfabeto, longitud_alfabeto);
-
-    // 14. Mostrar el texto cifrado
-    printf("\n=== TEXTO CIFRADO ===\n");
-    printf("%s\n", ciphertext);
+    return "?";
 }
 
 // Función para dividir el texto en bloques
@@ -1299,4 +1060,249 @@ int generate_valid_key(int n, int key_matrix[10][10], int mod_n)
     }
 
     return 0; // No se pudo encontrar una matriz válida después de max_attempts intentos
+}
+
+// Función para cifrar un mensaje usando el cifrado Hill
+void encrypt_message()
+{
+    int opcion_alfabeto;
+    const char **alfabeto;
+    int longitud_alfabeto;
+    int block_cols; // Tamaño de la matriz de clave (NxN) y número de columnas por bloque
+    int block_rows; // Número de filas por bloque
+    char plaintext[1000];
+    char key_text[1000];
+    int key_matrix[10][10] = {0};            // Inicializar con ceros
+    int plaintext_blocks[100][10][10] = {0}; // Para almacenar los bloques del mensaje
+    int num_blocks = 0;
+    int opcion_clave;
+
+    // 1. Seleccionar el alfabeto
+    printf("Seleccione el alfabeto:\n");
+    printf("1. Español (incluye ñ, 27 caracteres)\n");
+    printf("2. Inglés (26 caracteres)\n");
+    printf("Opción: ");
+    scanf("%d", &opcion_alfabeto);
+    getchar(); // Consumir salto de línea
+
+    if (opcion_alfabeto == 1)
+    {
+        alfabeto = alfabeto_es;
+        longitud_alfabeto = 27;
+        printf("Alfabeto español seleccionado (módulo %d).\n", longitud_alfabeto);
+    }
+    else if (opcion_alfabeto == 2)
+    {
+        alfabeto = alfabeto_en;
+        longitud_alfabeto = 26;
+        printf("Alfabeto inglés seleccionado (módulo %d).\n", longitud_alfabeto);
+    }
+    else
+    {
+        printf("Opción inválida. Se usará el alfabeto inglés por defecto.\n");
+        alfabeto = alfabeto_en;
+        longitud_alfabeto = 26;
+    }
+
+    // 2. Solicitar tamaño de la matriz clave (que es cuadrada NxN)
+    printf("Ingrese el tamaño de la matriz clave (n x n): ");
+    scanf("%d", &block_cols);
+    getchar(); // Consumir salto de línea
+
+    // Validar el tamaño de la clave
+    if (block_cols <= 0 || block_cols > 10)
+    {
+        printf("Error: El tamaño de la matriz clave debe estar entre 1 y 10.\n");
+        return;
+    }
+
+    // 2.1. Solicitar número de filas por bloque para el mensaje
+    printf("Ingrese el número de filas por bloque para el mensaje: ");
+    scanf("%d", &block_rows);
+    getchar(); // Consumir salto de línea
+
+    // Validar el número de filas por bloque
+    if (block_rows <= 0 || block_rows > 10)
+    {
+        printf("Error: El número de filas por bloque debe estar entre 1 y 10.\n");
+        return;
+    }
+
+    // 3. Preguntar si desea generar una clave válida o introducirla manualmente
+    printf("¿Desea generar una clave válida automáticamente o ingresarla manualmente?\n");
+    printf("1. Generar automáticamente\n");
+    printf("2. Ingresar manualmente\n");
+    printf("Opción: ");
+    scanf("%d", &opcion_clave);
+    getchar(); // Consumir salto de línea
+
+    if (opcion_clave == 1)
+    {
+        // Generar matriz clave válida
+        if (generate_valid_key(block_cols, key_matrix, longitud_alfabeto))
+        {
+            printf("Se ha generado una clave válida para módulo %d.\n", longitud_alfabeto);
+
+            // Mostrar la clave generada en formato texto
+            printf("Clave generada (numérica): \n");
+            imprimir_matriz_numerica(block_cols, key_matrix);
+
+            printf("Clave generada (alfabética): \n");
+            imprimir_matriz_alfabetica(block_cols, key_matrix, alfabeto, longitud_alfabeto);
+
+            // Crear una representación textual de la clave
+            int pos = 0;
+            for (int i = 0; i < block_cols; i++)
+            {
+                for (int j = 0; j < block_cols; j++)
+                {
+                    const char *letra = numero_a_letra(key_matrix[i][j], alfabeto, longitud_alfabeto);
+                    strcpy(key_text + pos, letra);
+                    pos += strlen(letra);
+                }
+            }
+            key_text[pos] = '\0';
+            printf("Clave generada (texto): %s\n", key_text);
+        }
+        else
+        {
+            printf("Error al generar una clave válida. Por favor, inténtelo de nuevo.\n");
+            return;
+        }
+    }
+    else
+    {
+        // 3. Solicitar la clave como texto
+        printf("Ingrese la clave (al menos %d caracteres): ", block_cols * block_cols);
+        fgets(key_text, sizeof(key_text), stdin);
+        key_text[strcspn(key_text, "\n")] = '\0'; // Eliminar salto de línea
+
+        // Convertir la clave a matriz numérica
+        texto_a_matriz_numerica(key_text, block_cols, key_matrix, alfabeto, longitud_alfabeto);
+
+        // Verificar que la clave sea válida (tenga inversa)
+        Frac mat[block_cols][block_cols];
+        for (int i = 0; i < block_cols; i++)
+        {
+            for (int j = 0; j < block_cols; j++)
+            {
+                mat[i][j] = frac(key_matrix[i][j], 1);
+            }
+        }
+
+        int det = determinant_mod(block_cols, mat, longitud_alfabeto);
+        if (det == 0 || det == -1)
+        {
+            printf("La clave ingresada no es válida (no tiene inversa módulo %d).\n", longitud_alfabeto);
+            printf("Por favor, intente con otra clave.\n");
+            return;
+        }
+    }
+
+    // 4. Solicitar el mensaje a cifrar
+    printf("Ingrese el mensaje a cifrar: ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+    plaintext[strcspn(plaintext, "\n")] = '\0'; // Eliminar salto de línea
+
+    // 5. Convertir el mensaje en bloques (la clave ya está convertida)
+    num_blocks = dividir_texto_en_bloques(plaintext, block_rows, block_cols, plaintext_blocks, alfabeto, longitud_alfabeto);
+
+    // 7. Mostrar información
+    printf("\n=== INFORMACIÓN DE CIFRADO ===\n");
+    printf("Alfabeto: %s (%d caracteres)\n",
+           opcion_alfabeto == 1 ? "Español" : "Inglés",
+           longitud_alfabeto);
+    printf("Tamaño de la matriz clave: %d x %d\n", block_cols, block_cols);
+    printf("Tamaño de los bloques de mensaje: %d x %d\n", block_rows, block_cols);
+    printf("Clave (texto): %s\n", key_text);
+    printf("Mensaje a cifrar: %s\n", plaintext);
+
+    // 8. Mostrar la matriz clave en formato numérico
+    printf("\n=== MATRIZ CLAVE (NUMÉRICA) ===\n");
+    imprimir_matriz_numerica(block_cols, key_matrix);
+
+    // 9. Mostrar la matriz clave en formato alfabético
+    printf("\n=== MATRIZ CLAVE (ALFABÉTICA) ===\n");
+    imprimir_matriz_alfabetica(block_cols, key_matrix, alfabeto, longitud_alfabeto);
+
+    // 10. Mostrar los bloques del mensaje en formato numérico y alfabético
+    printf("\n======================================================\n");
+    printf("=== BLOQUES DEL MENSAJE A CIFRAR (TOTAL: %d) ===\n", num_blocks);
+    printf("======================================================\n");
+
+    for (int b = 0; b < num_blocks; b++)
+    {
+        printf("\n============= BLOQUE %d DE %d =============\n", b + 1, num_blocks);
+
+        printf("Representación numérica:\n");
+        for (int i = 0; i < block_rows; i++)
+        {
+            for (int j = 0; j < block_cols; j++)
+            {
+                printf("%2d ", plaintext_blocks[b][i][j]);
+            }
+            printf("\n");
+        }
+
+        printf("Representación alfabética:\n");
+        for (int i = 0; i < block_rows; i++)
+        {
+            for (int j = 0; j < block_cols; j++)
+            {
+                printf("%2s ", numero_a_letra(plaintext_blocks[b][i][j], alfabeto, longitud_alfabeto));
+            }
+            printf("\n");
+        }
+
+        printf("==========================================\n");
+    }
+
+    // 11. Realizar el proceso de cifrado
+    printf("\n=== PROCESO DE CIFRADO ===\n");
+
+    // Arreglos para almacenar el mensaje cifrado
+    int ciphertext_blocks[100][10][10] = {0};
+    char ciphertext[1000] = {0};
+
+    // Cifrar cada bloque del mensaje
+    cifrar_mensaje(block_rows, block_cols, num_blocks, key_matrix, plaintext_blocks, ciphertext_blocks, longitud_alfabeto);
+
+    // 12. Mostrar los bloques cifrados
+    printf("\n======================================================\n");
+    printf("=== BLOQUES DEL MENSAJE CIFRADO (TOTAL: %d) ===\n", num_blocks);
+    printf("======================================================\n");
+
+    for (int b = 0; b < num_blocks; b++)
+    {
+        printf("\n============= BLOQUE %d DE %d =============\n", b + 1, num_blocks);
+
+        printf("Representación numérica:\n");
+        for (int i = 0; i < block_rows; i++)
+        {
+            for (int j = 0; j < block_cols; j++)
+            {
+                printf("%2d ", ciphertext_blocks[b][i][j]);
+            }
+            printf("\n");
+        }
+
+        printf("Representación alfabética:\n");
+        for (int i = 0; i < block_rows; i++)
+        {
+            for (int j = 0; j < block_cols; j++)
+            {
+                printf("%2s ", numero_a_letra(ciphertext_blocks[b][i][j], alfabeto, longitud_alfabeto));
+            }
+            printf("\n");
+        }
+
+        printf("==========================================\n");
+    }
+
+    // 13. Convertir los bloques cifrados a texto
+    matrices_a_texto(block_rows, block_cols, num_blocks, ciphertext_blocks, ciphertext, alfabeto, longitud_alfabeto);
+
+    // 14. Mostrar el texto cifrado
+    printf("\n=== TEXTO CIFRADO ===\n");
+    printf("%s\n", ciphertext);
 }
