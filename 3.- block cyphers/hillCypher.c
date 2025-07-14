@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <locale.h>
 #include <wchar.h>
 #include <wctype.h>
 #include <time.h>
@@ -133,9 +132,6 @@ void free_block_matrices(int ***blocks, int num_blocks, int rows)
 
 int main()
 {
-    // Configurar la localidad para manejar caracteres especiales
-    setlocale(LC_ALL, "");
-
     int option = 0;
 
     while (option != 3)

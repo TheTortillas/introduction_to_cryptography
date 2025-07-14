@@ -1,0 +1,20 @@
+# Configuración de VS Code
+/.vscode/*
+
+# Ejecutables generados por GCC
+# Archivos sin extensión (ejecutables típicos en Linux)
+*
+!*/
+!*.*
+
+# Archivos objeto
+*.o
+*.obj
+
+# Archivos de biblioteca
+*.a
+*.so
+*.so.*
+
+# Archivos de depuración
+*.gdb
