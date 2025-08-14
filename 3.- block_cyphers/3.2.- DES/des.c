@@ -122,24 +122,23 @@ static char iteration_shift[] = {
     1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1};
 
 // Function prototypes
-void print_binary(uint64_t num, int bits);
-void print_hex(uint64_t num);
+// Key generation and processing
 uint64_t string_to_binary(const char *str);
 size_t get_num_blocks(size_t message_length);
 void string_to_blocks(const char *input, uint64_t *blocks, size_t num_blocks);
-
-// New function prototypes for key scheduling
 uint64_t apply_permutation(uint64_t input, const char *table, int input_len, int output_len);
 uint32_t left_rotate_28(uint32_t value, int shift_count);
 void generate_subkeys(uint64_t key, uint64_t *subkeys);
 
-// Add these new function prototypes
+// DES core functions
 uint64_t des_encrypt(uint64_t block, uint64_t *subkeys);
 uint64_t des_decrypt(uint64_t block, uint64_t *subkeys);
 uint32_t f_function(uint32_t r, uint64_t subkey);
-uint64_t expand(uint32_t r);
-uint32_t substitute(uint64_t expanded_xor);
-uint32_t permute_p(uint32_t s_output);
+uint32_t s_boxes(uint64_t expanded_xor);
+
+// Utility functions
+void print_binary(uint64_t num, int bits);
+void print_hex(uint64_t num);
 
 int main()
 {
@@ -434,7 +433,7 @@ uint64_t des_decrypt(uint64_t block, uint64_t *subkeys)
 uint32_t f_function(uint32_t r, uint64_t subkey)
 {
     // 1. Expansion: expand 32-bit R to 48-bit using E-table
-    uint64_t expanded = expand(r);
+    uint64_t expanded = apply_permutation(r, E, 32, 48);
     printf("    Expanded R: ");
     print_binary(expanded, 48);
     printf("    Subkey: ");
@@ -446,38 +445,20 @@ uint32_t f_function(uint32_t r, uint64_t subkey)
     print_binary(expanded_xor, 48);
 
     // 3. S-box substitution: 48-bit to 32-bit
-    uint32_t s_output = substitute(expanded_xor);
+    uint32_t s_output = s_boxes(expanded_xor);
     printf("    After S-box substitution: ");
     print_binary(s_output, 32);
 
     // 4. Permutation using P table
-    uint32_t p_output = permute_p(s_output);
+    uint32_t p_output = apply_permutation(s_output, P, 32, 32);
     printf("    After P permutation: ");
     print_binary(p_output, 32);
 
     return p_output;
 }
 
-// Expand 32-bit input to 48-bit output using E-table
-uint64_t expand(uint32_t r)
-{
-    uint64_t result = 0;
-
-    for (int i = 0; i < 48; i++)
-    {
-        // E table is 1-indexed, so subtract 1
-        int position = E[i] - 1;
-        // Get the bit at position from r
-        uint32_t bit = (r >> (31 - position)) & 1;
-        // Set this bit in result
-        result |= ((uint64_t)bit << (47 - i));
-    }
-
-    return result;
-}
-
 // Apply S-box substitution to convert 48 bits to 32 bits
-uint32_t substitute(uint64_t expanded_xor)
+uint32_t s_boxes(uint64_t expanded_xor)
 {
     uint32_t result = 0;
 
@@ -499,24 +480,6 @@ uint32_t substitute(uint64_t expanded_xor)
 
         printf("    S%d: 6-bit input: %02X, row: %d, col: %d, output: %X\n",
                i + 1, sixBit, row, col, val);
-    }
-
-    return result;
-}
-
-// Apply P-box permutation
-uint32_t permute_p(uint32_t s_output)
-{
-    uint32_t result = 0;
-
-    for (int i = 0; i < 32; i++)
-    {
-        // P table is 1-indexed, so subtract 1
-        int position = P[i] - 1;
-        // Get the bit at position from s_output
-        uint32_t bit = (s_output >> (31 - position)) & 1;
-        // Set this bit in result
-        result |= (bit << (31 - i));
     }
 
     return result;
