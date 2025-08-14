@@ -128,6 +128,11 @@ uint64_t string_to_binary(const char *str);
 size_t get_num_blocks(size_t message_length);
 void string_to_blocks(const char *input, uint64_t *blocks, size_t num_blocks);
 
+// New function prototypes for key scheduling
+uint64_t apply_permutation(uint64_t input, const char *table, int input_len, int output_len);
+uint32_t left_rotate_28(uint32_t value, int shift_count);
+void generate_subkeys(uint64_t key, uint64_t *subkeys);
+
 int main()
 {
     char plaintext[1024];
@@ -146,12 +151,9 @@ int main()
     // Process key
     uint64_t key_block = string_to_binary(key);
 
-    // Calculate number of blocks needed for plaintext
-    size_t num_blocks = get_num_blocks(strlen(plaintext));
-    uint64_t *plaintext_blocks = malloc(num_blocks * sizeof(uint64_t));
-
-    // Convert plaintext to blocks
-    string_to_blocks(plaintext, plaintext_blocks, num_blocks);
+    // Generate the 16 round subkeys
+    uint64_t subkeys[16];
+    generate_subkeys(key_block, subkeys);
 
     // Print key
     printf("\nKey Block:\n");
@@ -159,6 +161,24 @@ int main()
     print_binary(key_block, 64);
     printf("Hex: ");
     print_hex(key_block);
+
+    // Print all subkeys
+    printf("\nSubkeys:\n");
+    for (int i = 0; i < 16; i++)
+    {
+        printf("\nSubkey %d:\n", i + 1);
+        printf("Binary: ");
+        print_binary(subkeys[i], 48);
+        printf("Hex: ");
+        print_hex(subkeys[i]);
+    }
+
+    // Calculate number of blocks needed for plaintext
+    size_t num_blocks = get_num_blocks(strlen(plaintext));
+    uint64_t *plaintext_blocks = malloc(num_blocks * sizeof(uint64_t));
+
+    // Convert plaintext to blocks
+    string_to_blocks(plaintext, plaintext_blocks, num_blocks);
 
     // Print all plaintext blocks
     printf("\nPlaintext Blocks:\n");
@@ -223,5 +243,75 @@ void string_to_blocks(const char *input, uint64_t *blocks, size_t num_blocks)
             unsigned char byte = (pos < input_len) ? input[pos] : ' ';
             blocks[i] = (blocks[i] << 8) | byte;
         }
+    }
+}
+
+// Apply a permutation to bits according to the provided table
+uint64_t apply_permutation(uint64_t input, const char *table, int input_len, int output_len)
+{
+    uint64_t output = 0;
+
+    for (int i = 0; i < output_len; i++)
+    {
+        // Permutation tables are 1-indexed, so subtract 1
+        int pos = table[i] - 1;
+
+        // Get the bit at position pos from input
+        uint64_t bit = (input >> (input_len - 1 - pos)) & 1;
+
+        // Place it at position i in output
+        output |= (bit << (output_len - 1 - i));
+    }
+
+    return output;
+}
+
+// Left rotate a 28-bit value by shift_count positions
+uint32_t left_rotate_28(uint32_t value, int shift_count)
+{
+    // Ensure value is 28 bits
+    value &= 0x0FFFFFFF;
+
+    // Perform rotation
+    uint32_t left_part = (value << shift_count) & 0x0FFFFFFF;
+    uint32_t right_part = value >> (28 - shift_count);
+
+    return left_part | right_part;
+}
+
+// Generate all 16 subkeys for DES rounds
+void generate_subkeys(uint64_t key, uint64_t *subkeys)
+{
+    // Apply PC1 permutation (64 bits -> 56 bits)
+    uint64_t permuted_key = apply_permutation(key, PC1, 64, 56);
+
+    // Split into 28-bit halves C0 and D0
+    uint32_t C = (uint32_t)((permuted_key >> 28) & 0x0FFFFFFF);
+    uint32_t D = (uint32_t)(permuted_key & 0x0FFFFFFF);
+
+    printf("\nAfter PC1:\n");
+    printf("C0: ");
+    print_binary(C, 28);
+    printf("D0: ");
+    print_binary(D, 28);
+
+    // Generate the 16 subkeys
+    for (int i = 0; i < 16; i++)
+    {
+        // Apply rotation based on iteration_shift
+        C = left_rotate_28(C, iteration_shift[i]);
+        D = left_rotate_28(D, iteration_shift[i]);
+
+        printf("\nAfter rotation %d:\n", i + 1);
+        printf("C%d: ", i + 1);
+        print_binary(C, 28);
+        printf("D%d: ", i + 1);
+        print_binary(D, 28);
+
+        // Combine C and D
+        uint64_t combined = ((uint64_t)C << 28) | D;
+
+        // Apply PC2 (56 bits -> 48 bits) to get the subkey
+        subkeys[i] = apply_permutation(combined, PC2, 56, 48);
     }
 }
