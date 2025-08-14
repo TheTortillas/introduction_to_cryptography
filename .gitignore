@@ -6,6 +6,9 @@
 *
 !*/
 !*.*
+!makefile
+!Makefile
+!*.mk
 
 # Archivos objeto
 *.o
