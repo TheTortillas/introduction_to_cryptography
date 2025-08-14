@@ -6,6 +6,9 @@
 // DES processes 64-bit blocks using a 56-bit key
 #define DES_BLOCK_SIZE 64
 #define DES_KEY_SIZE 56
+#define DES_SUBKEY_SIZE 48
+#define DES_NUM_ROUNDS 16
+#define DES_NUM_SBOXES 8
 
 /* Initial Permutation Table */
 static char IP[] = {
@@ -364,7 +367,8 @@ void generate_subkeys(uint64_t key, uint64_t *subkeys)
 }
 
 // The main DES encryption function
-uint64_t des_encrypt(uint64_t block, uint64_t *subkeys)
+uint64_t 
+des_encrypt(uint64_t block, uint64_t *subkeys)
 {
     printf("\n--- ENCRYPTION PROCESS ---\n");
     printf("Step 1: Apply initial permutation (IP)\n");
