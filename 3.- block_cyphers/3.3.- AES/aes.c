@@ -92,18 +92,41 @@ size_t get_num_blocks(size_t message_length);
 void print_hex_block(const uint8_t *block, size_t len);
 void print_state(const uint8_t *state);
 void bytes_to_string(const uint8_t *bytes, char *str, size_t len);
+int parse_hex_input(const char *hex_string, uint8_t **blocks, size_t *num_blocks);
 
 int main()
 {
-    char plaintext[1024];
+    char input_text[1024];
     char key[AES_256_KEY_SIZE + 1]; // Large enough for the biggest key
+    int operation;
     int key_size_choice;
     int key_size;
     int rounds;
 
-    // Read plaintext
-    printf("Enter plaintext: ");
-    scanf("%1023[^\n]", plaintext);
+    // Get operation choice from user
+    printf("Choose operation:\n");
+    printf("1. Encrypt\n");
+    printf("2. Decrypt\n");
+    printf("Enter choice (1 or 2): ");
+    scanf("%d", &operation);
+    getchar(); // Clear the newline from buffer
+
+    if (operation != 1 && operation != 2)
+    {
+        printf("Invalid choice. Please enter 1 for encryption or 2 for decryption.\n");
+        return 1;
+    }
+
+    // Read input text based on operation
+    if (operation == 1)
+    {
+        printf("Enter plaintext: ");
+    }
+    else
+    {
+        printf("Enter ciphertext (as hex bytes, e.g., 01 23 45 67...): ");
+    }
+    scanf("%1023[^\n]", input_text);
     getchar(); // Clear the newline
 
     // Ask for key size
@@ -159,78 +182,144 @@ int main()
         print_hex_block(&expanded_key[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
     }
 
-    // Calculate number of blocks
-    size_t plaintext_len = strlen(plaintext);
-    size_t num_blocks = get_num_blocks(plaintext_len);
-
-    // Allocate memory for blocks
-    uint8_t **plaintext_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
-    uint8_t **ciphertext_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
-    uint8_t **decrypted_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
-
-    for (size_t i = 0; i < num_blocks; i++)
+    if (operation == 1)
     {
-        plaintext_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
-        ciphertext_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
-        decrypted_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
+        // ENCRYPTION
+        printf("\n=== ENCRYPTION MODE ===\n");
 
-        // Initialize with zeros
-        memset(plaintext_blocks[i], 0, AES_BLOCK_SIZE);
+        // Calculate number of blocks
+        size_t input_len = strlen(input_text);
+        size_t num_blocks = get_num_blocks(input_len);
+
+        // Allocate memory for blocks
+        uint8_t **plaintext_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
+        uint8_t **ciphertext_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
+
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            plaintext_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
+            ciphertext_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
+
+            // Initialize with zeros
+            memset(plaintext_blocks[i], 0, AES_BLOCK_SIZE);
+        }
+
+        // Convert plaintext to blocks
+        for (size_t i = 0; i < input_len; i++)
+        {
+            size_t block_idx = i / AES_BLOCK_SIZE;
+            size_t byte_idx = i % AES_BLOCK_SIZE;
+            plaintext_blocks[block_idx][byte_idx] = input_text[i];
+        }
+
+        // Print plaintext blocks
+        printf("\nPlaintext Blocks:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("Block %zu:\n", i + 1);
+            print_state(plaintext_blocks[i]);
+        }
+
+        // Encrypt each block
+        printf("\nEncryption Process:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("\nEncrypting Block %zu:\n", i + 1);
+            aes_encrypt_block(plaintext_blocks[i], ciphertext_blocks[i], expanded_key, rounds);
+
+            printf("Ciphertext Block %zu:\n", i + 1);
+            print_state(ciphertext_blocks[i]);
+        }
+
+        printf("\n=== FINAL ENCRYPTED RESULT ===\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("Block %zu: ", i + 1);
+            print_hex_block(ciphertext_blocks[i], AES_BLOCK_SIZE);
+        }
+
+        // Free allocated memory
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            free(plaintext_blocks[i]);
+            free(ciphertext_blocks[i]);
+        }
+        free(plaintext_blocks);
+        free(ciphertext_blocks);
     }
-
-    // Convert plaintext to blocks
-    for (size_t i = 0; i < plaintext_len; i++)
+    else
     {
-        size_t block_idx = i / AES_BLOCK_SIZE;
-        size_t byte_idx = i % AES_BLOCK_SIZE;
-        plaintext_blocks[block_idx][byte_idx] = plaintext[i];
+        // DECRYPTION
+        printf("\n=== DECRYPTION MODE ===\n");
+
+        // Parse hex input
+        uint8_t *ciphertext_data;
+        size_t num_blocks;
+
+        if (!parse_hex_input(input_text, &ciphertext_data, &num_blocks))
+        {
+            printf("Error: Invalid hex format. Please enter hex bytes like: 01 23 45 67 89 AB CD EF...\n");
+            return 1;
+        }
+
+        // Organize into blocks
+        uint8_t **ciphertext_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
+        uint8_t **decrypted_blocks = (uint8_t **)malloc(num_blocks * sizeof(uint8_t *));
+
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            ciphertext_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
+            decrypted_blocks[i] = (uint8_t *)malloc(AES_BLOCK_SIZE);
+
+            // Copy data to block
+            memcpy(ciphertext_blocks[i], &ciphertext_data[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+        }
+
+        // Print ciphertext blocks
+        printf("\nCiphertext Blocks:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("Block %zu:\n", i + 1);
+            print_state(ciphertext_blocks[i]);
+        }
+
+        // Decrypt each block
+        printf("\nDecryption Process:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("\nDecrypting Block %zu:\n", i + 1);
+            aes_decrypt_block(ciphertext_blocks[i], decrypted_blocks[i], expanded_key, rounds);
+
+            printf("Decrypted Block %zu:\n", i + 1);
+            print_state(decrypted_blocks[i]);
+        }
+
+        // Convert back to text and print final result
+        printf("\n=== FINAL DECRYPTED RESULT ===\n");
+        char *decrypted_text = malloc((num_blocks * AES_BLOCK_SIZE + 1) * sizeof(char));
+
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            for (int j = 0; j < AES_BLOCK_SIZE; j++)
+            {
+                decrypted_text[i * AES_BLOCK_SIZE + j] = decrypted_blocks[i][j];
+            }
+        }
+        decrypted_text[num_blocks * AES_BLOCK_SIZE] = '\0';
+
+        printf("Decrypted text: '%s'\n", decrypted_text);
+
+        // Free allocated memory
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            free(ciphertext_blocks[i]);
+            free(decrypted_blocks[i]);
+        }
+        free(ciphertext_blocks);
+        free(decrypted_blocks);
+        free(ciphertext_data);
+        free(decrypted_text);
     }
-
-    // Print plaintext blocks
-    printf("\nPlaintext Blocks:\n");
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        printf("Block %zu:\n", i + 1);
-        print_state(plaintext_blocks[i]);
-    }
-
-    // Encrypt each block
-    printf("\nEncryption Process:\n");
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        printf("\nEncrypting Block %zu:\n", i + 1);
-        aes_encrypt_block(plaintext_blocks[i], ciphertext_blocks[i], expanded_key, rounds);
-
-        printf("Ciphertext Block %zu:\n", i + 1);
-        print_state(ciphertext_blocks[i]);
-    }
-
-    // Decrypt each block
-    printf("\nDecryption Process:\n");
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        printf("\nDecrypting Block %zu:\n", i + 1);
-        aes_decrypt_block(ciphertext_blocks[i], decrypted_blocks[i], expanded_key, rounds);
-
-        printf("Decrypted Block %zu:\n", i + 1);
-        print_state(decrypted_blocks[i]);
-
-        // Convert back to characters and print
-        char decrypted_text[AES_BLOCK_SIZE + 1];
-        bytes_to_string(decrypted_blocks[i], decrypted_text, AES_BLOCK_SIZE);
-        printf("Text: %s\n", decrypted_text);
-    }
-
-    // Free allocated memory
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        free(plaintext_blocks[i]);
-        free(ciphertext_blocks[i]);
-        free(decrypted_blocks[i]);
-    }
-    free(plaintext_blocks);
-    free(ciphertext_blocks);
-    free(decrypted_blocks);
 
     return 0;
 }
@@ -663,4 +752,68 @@ void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const 
     printf("After AddRoundKey:\n");
     add_round_key(output_block, expanded_key); // First round key
     print_state(output_block);
+}
+
+// Parse hex input string into bytes for decryption
+int parse_hex_input(const char *hex_string, uint8_t **blocks, size_t *num_blocks)
+{
+    // Count hex pairs (2 characters = 1 byte)
+    char *input_copy = strdup(hex_string);
+    char *token;
+    size_t byte_count = 0;
+
+    // First pass: count hex bytes
+    char *temp_copy = strdup(hex_string);
+    token = strtok(temp_copy, " ,\t\n");
+    while (token != NULL)
+    {
+        // Each token should be 2 hex characters (1 byte)
+        if (strlen(token) == 2)
+        {
+            byte_count++;
+        }
+        else
+        {
+            printf("Error: Invalid hex byte format '%s'. Each byte should be 2 hex digits.\n", token);
+            free(temp_copy);
+            free(input_copy);
+            return 0;
+        }
+        token = strtok(NULL, " ,\t\n");
+    }
+    free(temp_copy);
+
+    if (byte_count == 0)
+    {
+        free(input_copy);
+        return 0;
+    }
+
+    // Calculate number of blocks (round up to AES_BLOCK_SIZE)
+    *num_blocks = (byte_count + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE;
+
+    // Allocate memory for all bytes
+    *blocks = malloc(*num_blocks * AES_BLOCK_SIZE);
+    memset(*blocks, 0, *num_blocks * AES_BLOCK_SIZE); // Initialize with zeros
+
+    // Second pass: parse hex values
+    size_t i = 0;
+    token = strtok(input_copy, " ,\t\n");
+    while (token != NULL && i < byte_count)
+    {
+        unsigned int hex_value;
+        if (sscanf(token, "%2x", &hex_value) != 1)
+        {
+            printf("Error parsing hex value: %s\n", token);
+            free(input_copy);
+            free(*blocks);
+            return 0;
+        }
+        (*blocks)[i] = (uint8_t)hex_value;
+        i++;
+        token = strtok(NULL, " ,\t\n");
+    }
+
+    free(input_copy);
+    return 1;
 }
