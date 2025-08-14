@@ -142,6 +142,7 @@ uint32_t s_boxes(uint64_t expanded_xor);
 // Utility functions
 void print_binary(uint64_t num, int bits);
 void print_hex(uint64_t num);
+void print_hex_bytes(uint64_t num); // New standardized hex byte format
 int parse_hex_blocks(const char *hex_string, uint64_t **blocks, size_t *num_blocks);
 
 int main()
@@ -171,7 +172,7 @@ int main()
     }
     else
     {
-        printf("Enter ciphertext (as hex, e.g., 0x123456789ABCDEF0, with a space between each encrypted block): ");
+        printf("Enter ciphertext (as hex bytes, e.g., AA BB CC DD 11 22 33 44): ");
     }
     scanf("%1023[^\n]", input_text);
     getchar(); // Clear the newline from buffer
@@ -249,7 +250,7 @@ int main()
         for (size_t i = 0; i < num_blocks; i++)
         {
             printf("Block %zu: ", i + 1);
-            print_hex(ciphertext_blocks[i]);
+            print_hex_bytes(ciphertext_blocks[i]);
         }
 
         free(plaintext_blocks);
@@ -266,7 +267,7 @@ int main()
 
         if (!parse_hex_blocks(input_text, &ciphertext_blocks, &num_blocks))
         {
-            printf("Error: Invalid hex format. Please enter hex like: 123456789ABCDEF0 or multiple blocks separated by spaces\n");
+            printf("Error: Invalid hex format. Please enter hex like: AA BB CC DD 11 22 33 44 or AABBCCDD11223344\n");
             return 1;
         }
 
@@ -326,6 +327,18 @@ void print_binary(uint64_t num, int bits)
 void print_hex(uint64_t num)
 {
     printf("0x%016lX\n", num);
+}
+
+// Print 64-bit number as space-separated hex bytes (standardized format)
+void print_hex_bytes(uint64_t num)
+{
+    for (int i = 7; i >= 0; i--)
+    {
+        printf("%02X", (uint8_t)((num >> (i * 8)) & 0xFF));
+        if (i > 0)
+            printf(" ");
+    }
+    printf("\n");
 }
 
 // Convert string to 64-bit blocks
@@ -616,49 +629,111 @@ uint32_t s_boxes(uint64_t expanded_xor)
 }
 
 // Parse hex string into blocks for decryption
+// Supports both formats: "AABBCCDD11223344" or "AA BB CC DD 11 22 33 44"
 int parse_hex_blocks(const char *hex_string, uint64_t **blocks, size_t *num_blocks)
 {
-    // Count the number of hex values (separated by spaces or commas)
     char *input_copy = strdup(hex_string);
     char *token;
-    size_t count = 0;
+    size_t byte_count = 0;
+    uint8_t *bytes = NULL;
 
-    // First pass: count tokens
+    // First pass: count hex bytes
     char *temp_copy = strdup(hex_string);
     token = strtok(temp_copy, " ,\t\n");
     while (token != NULL)
     {
-        count++;
+        size_t token_len = strlen(token);
+        if (token_len == 2)
+        {
+            // Individual byte format: "AA BB CC DD"
+            byte_count++;
+        }
+        else if (token_len == 16)
+        {
+            // 64-bit hex format: "AABBCCDD11223344"
+            byte_count += 8;
+        }
+        else
+        {
+            printf("Error: Invalid hex format '%s'. Use either 2-digit bytes (AA BB) or 16-digit blocks (AABBCCDD11223344).\n", token);
+            free(temp_copy);
+            free(input_copy);
+            return 0;
+        }
         token = strtok(NULL, " ,\t\n");
     }
     free(temp_copy);
 
-    if (count == 0)
+    if (byte_count == 0)
     {
         free(input_copy);
         return 0;
     }
 
-    // Allocate memory for blocks
-    *blocks = malloc(count * sizeof(uint64_t));
-    *num_blocks = count;
+    // Allocate temporary byte array
+    bytes = malloc(byte_count);
+    size_t byte_idx = 0;
 
-    // Second pass: parse values
-    size_t i = 0;
+    // Second pass: parse hex values
     token = strtok(input_copy, " ,\t\n");
-    while (token != NULL && i < count)
+    while (token != NULL && byte_idx < byte_count)
     {
-        if (sscanf(token, "%lx", &(*blocks)[i]) != 1)
+        size_t token_len = strlen(token);
+        if (token_len == 2)
         {
-            printf("Error parsing hex value: %s\n", token);
-            free(input_copy);
-            free(*blocks);
-            return 0;
+            // Parse single byte
+            unsigned int hex_byte;
+            if (sscanf(token, "%2x", &hex_byte) != 1)
+            {
+                printf("Error parsing hex byte: %s\n", token);
+                free(input_copy);
+                free(bytes);
+                return 0;
+            }
+            bytes[byte_idx++] = (uint8_t)hex_byte;
         }
-        i++;
+        else if (token_len == 16)
+        {
+            // Parse 64-bit value and convert to bytes
+            uint64_t hex_block;
+            if (sscanf(token, "%lx", &hex_block) != 1)
+            {
+                printf("Error parsing hex block: %s\n", token);
+                free(input_copy);
+                free(bytes);
+                return 0;
+            }
+            // Convert 64-bit value to 8 bytes (big-endian)
+            for (int i = 7; i >= 0; i--)
+            {
+                bytes[byte_idx++] = (uint8_t)((hex_block >> (i * 8)) & 0xFF);
+            }
+        }
         token = strtok(NULL, " ,\t\n");
     }
 
+    // Convert bytes to 64-bit blocks
+    *num_blocks = (byte_count + 7) / 8; // Round up to complete blocks
+    *blocks = malloc(*num_blocks * sizeof(uint64_t));
+
+    for (size_t i = 0; i < *num_blocks; i++)
+    {
+        (*blocks)[i] = 0;
+        for (int j = 0; j < 8; j++)
+        {
+            size_t byte_pos = i * 8 + j;
+            if (byte_pos < byte_count)
+            {
+                (*blocks)[i] = ((*blocks)[i] << 8) | bytes[byte_pos];
+            }
+            else
+            {
+                (*blocks)[i] = (*blocks)[i] << 8; // Pad with zeros
+            }
+        }
+    }
+
     free(input_copy);
+    free(bytes);
     return 1;
 }
