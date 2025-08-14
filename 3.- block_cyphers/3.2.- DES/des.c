@@ -133,6 +133,14 @@ uint64_t apply_permutation(uint64_t input, const char *table, int input_len, int
 uint32_t left_rotate_28(uint32_t value, int shift_count);
 void generate_subkeys(uint64_t key, uint64_t *subkeys);
 
+// Add these new function prototypes
+uint64_t des_encrypt(uint64_t block, uint64_t *subkeys);
+uint64_t des_decrypt(uint64_t block, uint64_t *subkeys);
+uint32_t f_function(uint32_t r, uint64_t subkey);
+uint64_t expand(uint32_t r);
+uint32_t substitute(uint64_t expanded_xor);
+uint32_t permute_p(uint32_t s_output);
+
 int main()
 {
     char plaintext[1024];
@@ -191,7 +199,47 @@ int main()
         print_hex(plaintext_blocks[i]);
     }
 
+    // Encrypt each block
+    uint64_t *ciphertext_blocks = malloc(num_blocks * sizeof(uint64_t));
+
+    printf("\nEncryption Process:\n");
+    for (size_t i = 0; i < num_blocks; i++)
+    {
+        printf("\nEncrypting Block %zu:\n", i + 1);
+        ciphertext_blocks[i] = des_encrypt(plaintext_blocks[i], subkeys);
+
+        printf("\nCiphertext Block %zu:\n", i + 1);
+        printf("Binary: ");
+        print_binary(ciphertext_blocks[i], 64);
+        printf("Hex: ");
+        print_hex(ciphertext_blocks[i]);
+    }
+
+    // Decrypt each block to verify
+    printf("\nDecryption Process:\n");
+    for (size_t i = 0; i < num_blocks; i++)
+    {
+        printf("\nDecrypting Block %zu:\n", i + 1);
+        uint64_t decrypted = des_decrypt(ciphertext_blocks[i], subkeys);
+
+        printf("\nDecrypted Block %zu:\n", i + 1);
+        printf("Binary: ");
+        print_binary(decrypted, 64);
+        printf("Hex: ");
+        print_hex(decrypted);
+
+        // Convert back to characters and print
+        char decrypted_text[9];
+        for (int j = 0; j < 8; j++)
+        {
+            decrypted_text[j] = (decrypted >> (56 - j * 8)) & 0xFF;
+        }
+        decrypted_text[8] = '\0';
+        printf("Text: %s\n", decrypted_text);
+    }
+
     free(plaintext_blocks);
+    free(ciphertext_blocks);
     return 0;
 }
 
@@ -314,4 +362,162 @@ void generate_subkeys(uint64_t key, uint64_t *subkeys)
         // Apply PC2 (56 bits -> 48 bits) to get the subkey
         subkeys[i] = apply_permutation(combined, PC2, 56, 48);
     }
+}
+
+// The main DES encryption function
+uint64_t des_encrypt(uint64_t block, uint64_t *subkeys)
+{
+    // Apply initial permutation
+    uint64_t permuted = apply_permutation(block, IP, 64, 64);
+    printf("After initial permutation: ");
+    print_hex(permuted);
+
+    // Split into left and right halves
+    uint32_t L = (uint32_t)(permuted >> 32) & 0xFFFFFFFF;
+    uint32_t R = (uint32_t)(permuted & 0xFFFFFFFF);
+
+    printf("L0: ");
+    print_binary(L, 32);
+    printf("R0: ");
+    print_binary(R, 32);
+
+    // Apply 16 rounds of encryption
+    for (int i = 0; i < 16; i++)
+    {
+        uint32_t prev_L = L;
+        L = R;                                  // L[i] = R[i-1]
+        R = prev_L ^ f_function(R, subkeys[i]); // R[i] = L[i-1] XOR f(R[i-1], K[i])
+
+        printf("\nRound %d:\n", i + 1);
+        printf("L%d: ", i + 1);
+        print_binary(L, 32);
+        printf("R%d: ", i + 1);
+        print_binary(R, 32);
+    }
+
+    // Final swap and inverse permutation
+    uint64_t pre_output = ((uint64_t)R << 32) | L; // Note the swap here
+    printf("\nAfter final swap: ");
+    print_hex(pre_output);
+
+    uint64_t output = apply_permutation(pre_output, PI, 64, 64);
+    printf("After inverse permutation: ");
+    print_hex(output);
+
+    return output;
+}
+
+// The main DES decryption function - same as encrypt but with subkeys in reverse order
+uint64_t des_decrypt(uint64_t block, uint64_t *subkeys)
+{
+    // Apply initial permutation
+    uint64_t permuted = apply_permutation(block, IP, 64, 64);
+
+    // Split into left and right halves
+    uint32_t L = (uint32_t)(permuted >> 32) & 0xFFFFFFFF;
+    uint32_t R = (uint32_t)(permuted & 0xFFFFFFFF);
+
+    // Apply 16 rounds of decryption (using subkeys in reverse)
+    for (int i = 0; i < 16; i++)
+    {
+        uint32_t prev_L = L;
+        L = R;
+        R = prev_L ^ f_function(R, subkeys[15 - i]); // Note the reversed key order
+    }
+
+    // Final swap and inverse permutation
+    uint64_t pre_output = ((uint64_t)R << 32) | L;
+    return apply_permutation(pre_output, PI, 64, 64);
+}
+
+// The f-function: the heart of DES
+uint32_t f_function(uint32_t r, uint64_t subkey)
+{
+    // 1. Expansion: expand 32-bit R to 48-bit using E-table
+    uint64_t expanded = expand(r);
+    printf("    Expanded R: ");
+    print_binary(expanded, 48);
+    printf("    Subkey: ");
+    print_binary(subkey, 48);
+
+    // 2. XOR with subkey
+    uint64_t expanded_xor = expanded ^ subkey;
+    printf("    After XOR with subkey: ");
+    print_binary(expanded_xor, 48);
+
+    // 3. S-box substitution: 48-bit to 32-bit
+    uint32_t s_output = substitute(expanded_xor);
+    printf("    After S-box substitution: ");
+    print_binary(s_output, 32);
+
+    // 4. Permutation using P table
+    uint32_t p_output = permute_p(s_output);
+    printf("    After P permutation: ");
+    print_binary(p_output, 32);
+
+    return p_output;
+}
+
+// Expand 32-bit input to 48-bit output using E-table
+uint64_t expand(uint32_t r)
+{
+    uint64_t result = 0;
+
+    for (int i = 0; i < 48; i++)
+    {
+        // E table is 1-indexed, so subtract 1
+        int position = E[i] - 1;
+        // Get the bit at position from r
+        uint32_t bit = (r >> (31 - position)) & 1;
+        // Set this bit in result
+        result |= ((uint64_t)bit << (47 - i));
+    }
+
+    return result;
+}
+
+// Apply S-box substitution to convert 48 bits to 32 bits
+uint32_t substitute(uint64_t expanded_xor)
+{
+    uint32_t result = 0;
+
+    // Process 8 groups of 6 bits each
+    for (int i = 0; i < 8; i++)
+    {
+        // Extract 6-bit block
+        int sixBit = (expanded_xor >> (42 - i * 6)) & 0x3F;
+
+        // Compute row and column
+        int row = ((sixBit & 0x20) >> 4) | (sixBit & 0x01); // bits 0 and 5
+        int col = (sixBit >> 1) & 0x0F;                     // bits 1-4
+
+        // Look up value in S-box
+        int val = S[i][row * 16 + col];
+
+        // Add to result
+        result |= (val << (28 - i * 4));
+
+        printf("    S%d: 6-bit input: %02X, row: %d, col: %d, output: %X\n",
+               i + 1, sixBit, row, col, val);
+    }
+
+    return result;
+}
+
+// Apply P-box permutation
+uint32_t permute_p(uint32_t s_output)
+{
+    uint32_t result = 0;
+
+    for (int i = 0; i < 32; i++)
+    {
+        // P table is 1-indexed, so subtract 1
+        int position = P[i] - 1;
+        // Get the bit at position from s_output
+        uint32_t bit = (s_output >> (31 - position)) & 1;
+        // Set this bit in result
+        result |= (bit << (31 - i));
+    }
+
+    return result;
 }
