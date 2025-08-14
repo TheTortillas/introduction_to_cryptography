@@ -7,8 +7,19 @@
 #define AES_BLOCK_SIZE 16 // 128 bits = 16 bytes
 #define AES_STATE_ROWS 4
 #define AES_STATE_COLS 4
+
+// Key size definitions
 #define AES_128_KEY_SIZE 16 // 128 bits = 16 bytes
-#define AES_128_ROUNDS 10   // 10 rounds for 128-bit key
+#define AES_192_KEY_SIZE 24 // 192 bits = 24 bytes
+#define AES_256_KEY_SIZE 32 // 256 bits = 32 bytes
+
+// Round definitions
+#define AES_128_ROUNDS 10 // 10 rounds for 128-bit key
+#define AES_192_ROUNDS 12 // 12 rounds for 192-bit key
+#define AES_256_ROUNDS 14 // 14 rounds for 256-bit key
+
+// Maximum possible rounds (for allocation purposes)
+#define AES_MAX_ROUNDS 14
 
 // Forward S-box for SubBytes transformation
 static const uint8_t s_box[256] = {
@@ -54,7 +65,7 @@ static const uint8_t rcon[11] = {
 
 // Function prototypes
 // Key expansion
-void key_expansion(const uint8_t *key, uint8_t *expanded_key);
+void key_expansion(const uint8_t *key, uint8_t *expanded_key, int key_size, int rounds);
 
 // AES core transformations
 void sub_bytes(uint8_t *state);
@@ -69,8 +80,8 @@ void add_round_key(uint8_t *state, const uint8_t *round_key);
 uint8_t gmul(uint8_t a, uint8_t b);
 
 // AES encryption and decryption
-void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key);
-void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key);
+void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key, int rounds);
+void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key, int rounds);
 
 // Utility functions
 void string_to_bytes(const char *str, uint8_t *bytes, size_t len);
@@ -82,36 +93,67 @@ void bytes_to_string(const uint8_t *bytes, char *str, size_t len);
 int main()
 {
     char plaintext[1024];
-    char key[17]; // For AES-128, key is 16 bytes
+    char key[AES_256_KEY_SIZE + 1]; // Large enough for the biggest key
+    int key_size_choice;
+    int key_size;
+    int rounds;
 
     // Read plaintext
     printf("Enter plaintext: ");
     scanf("%1023[^\n]", plaintext);
     getchar(); // Clear the newline
 
+    // Ask for key size
+    printf("Select key size:\n");
+    printf("1. 128-bit (16 bytes)\n");
+    printf("2. 192-bit (24 bytes)\n");
+    printf("3. 256-bit (32 bytes)\n");
+    printf("Choice: ");
+    scanf("%d", &key_size_choice);
+    getchar(); // Clear the newline
+
+    // Set key size and rounds based on choice
+    switch (key_size_choice)
+    {
+    case 2:
+        key_size = AES_192_KEY_SIZE;
+        rounds = AES_192_ROUNDS;
+        printf("Enter key (24 characters for AES-192): ");
+        break;
+    case 3:
+        key_size = AES_256_KEY_SIZE;
+        rounds = AES_256_ROUNDS;
+        printf("Enter key (32 characters for AES-256): ");
+        break;
+    default:
+        key_size = AES_128_KEY_SIZE;
+        rounds = AES_128_ROUNDS;
+        printf("Enter key (16 characters for AES-128): ");
+        break;
+    }
+
     // Read key
-    printf("Enter key (16 characters for AES-128): ");
-    scanf("%16[^\n]", key);
+    scanf("%[^\n]", key);
     getchar(); // Clear the newline
 
     // Process key - convert to bytes
-    uint8_t key_bytes[AES_128_KEY_SIZE];
-    string_to_bytes(key, key_bytes, AES_128_KEY_SIZE);
+    uint8_t key_bytes[AES_256_KEY_SIZE]; // Use max size for buffer
+    string_to_bytes(key, key_bytes, key_size);
 
     // Print key
-    printf("\nKey:\n");
-    print_hex_block(key_bytes, AES_128_KEY_SIZE);
+    printf("\nKey (%d-bit):\n", key_size * 8);
+    print_hex_block(key_bytes, key_size);
 
     // Key expansion - generate round keys
-    uint8_t expanded_key[AES_128_KEY_SIZE * (AES_128_ROUNDS + 1)]; // 11 round keys for AES-128
-    key_expansion(key_bytes, expanded_key);
+    uint8_t expanded_key[AES_256_KEY_SIZE * (AES_MAX_ROUNDS + 1)]; // Use max possible size
+    key_expansion(key_bytes, expanded_key, key_size, rounds);
 
     // Print round keys
     printf("\nRound Keys:\n");
-    for (int i = 0; i <= AES_128_ROUNDS; i++)
+    for (int i = 0; i <= rounds; i++)
     {
         printf("Round %2d: ", i);
-        print_hex_block(&expanded_key[i * AES_128_KEY_SIZE], AES_128_KEY_SIZE);
+        print_hex_block(&expanded_key[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
     }
 
     // Calculate number of blocks
@@ -154,7 +196,7 @@ int main()
     for (size_t i = 0; i < num_blocks; i++)
     {
         printf("\nEncrypting Block %zu:\n", i + 1);
-        aes_encrypt_block(plaintext_blocks[i], ciphertext_blocks[i], expanded_key);
+        aes_encrypt_block(plaintext_blocks[i], ciphertext_blocks[i], expanded_key, rounds);
 
         printf("Ciphertext Block %zu:\n", i + 1);
         print_state(ciphertext_blocks[i]);
@@ -165,7 +207,7 @@ int main()
     for (size_t i = 0; i < num_blocks; i++)
     {
         printf("\nDecrypting Block %zu:\n", i + 1);
-        aes_decrypt_block(ciphertext_blocks[i], decrypted_blocks[i], expanded_key);
+        aes_decrypt_block(ciphertext_blocks[i], decrypted_blocks[i], expanded_key, rounds);
 
         printf("Decrypted Block %zu:\n", i + 1);
         print_state(decrypted_blocks[i]);
@@ -239,56 +281,60 @@ void print_state(const uint8_t *state)
     }
 }
 
-// Key expansion routine
-void key_expansion(const uint8_t *key, uint8_t *expanded_key)
+// Key expansion routine - modified to handle different key sizes
+void key_expansion(const uint8_t *key, uint8_t *expanded_key, int key_size, int rounds)
 {
     // First round key is the original key
-    memcpy(expanded_key, key, AES_128_KEY_SIZE);
+    memcpy(expanded_key, key, key_size);
 
     uint8_t temp[4];
-    int i = 1;
+    int i = key_size / 4; // Number of 32-bit words in key
+    int N = key_size / 4; // Used to track key schedule
+    int rcon_index = 1;   // Round constant index
 
     // Generate the remaining round keys
-    while (i <= AES_128_ROUNDS)
+    while (i < 4 * (rounds + 1))
     {
-        // Last 4 bytes of previous round key
+        // Last 4 bytes of previous word
         for (int j = 0; j < 4; j++)
         {
-            temp[j] = expanded_key[(i - 1) * 16 + 12 + j];
+            temp[j] = expanded_key[(i - 1) * 4 + j];
         }
 
-        // Perform key schedule core
-        if (i % 1 == 0)
+        // Every N words, apply key schedule core
+        if (i % N == 0)
         {
-            // Rotate
+            // RotWord - rotate left one byte
             uint8_t k = temp[0];
             temp[0] = temp[1];
             temp[1] = temp[2];
             temp[2] = temp[3];
             temp[3] = k;
 
-            // SubBytes
+            // SubWord - apply S-box
             for (int j = 0; j < 4; j++)
             {
                 temp[j] = s_box[temp[j]];
             }
 
             // XOR with round constant
-            temp[0] ^= rcon[i];
+            temp[0] ^= rcon[rcon_index++];
+        }
+        // For AES-256, if index mod 8 = 4, apply SubWord
+        else if (key_size == AES_256_KEY_SIZE && i % N == 4)
+        {
+            // SubWord
+            for (int j = 0; j < 4; j++)
+            {
+                temp[j] = s_box[temp[j]];
+            }
         }
 
-        // First 4 bytes of current round key = First 4 bytes of previous round key XOR temp
+        // XOR with word N positions earlier
         for (int j = 0; j < 4; j++)
         {
-            expanded_key[i * 16 + j] = expanded_key[(i - 1) * 16 + j] ^ temp[j];
+            expanded_key[i * 4 + j] = expanded_key[(i - N) * 4 + j] ^ temp[j];
         }
-
-        // Generate the remaining 12 bytes of the round key
-        for (int j = 4; j < 16; j++)
-        {
-            expanded_key[i * 16 + j] = expanded_key[i * 16 + j - 4] ^ expanded_key[(i - 1) * 16 + j];
-        }
-
         i++;
     }
 }
@@ -440,8 +486,8 @@ void add_round_key(uint8_t *state, const uint8_t *round_key)
     }
 }
 
-// AES encryption of a single block
-void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key)
+// AES encryption of a single block - updated to handle variable rounds
+void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key, int rounds)
 {
     // Copy input to output for in-place operations
     memcpy(output_block, input_block, AES_BLOCK_SIZE);
@@ -455,7 +501,7 @@ void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const 
     print_state(output_block);
 
     // Main rounds
-    for (int round = 1; round < AES_128_ROUNDS; round++)
+    for (int round = 1; round < rounds; round++)
     {
         printf("\nRound %d:\n", round);
 
@@ -488,12 +534,12 @@ void aes_encrypt_block(const uint8_t *input_block, uint8_t *output_block, const 
     print_state(output_block);
 
     printf("After AddRoundKey:\n");
-    add_round_key(output_block, expanded_key + AES_128_ROUNDS * AES_BLOCK_SIZE);
+    add_round_key(output_block, expanded_key + rounds * AES_BLOCK_SIZE);
     print_state(output_block);
 }
 
-// AES decryption of a single block
-void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key)
+// AES decryption of a single block - updated to handle variable rounds
+void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const uint8_t *expanded_key, int rounds)
 {
     // Copy input to output for in-place operations
     memcpy(output_block, input_block, AES_BLOCK_SIZE);
@@ -503,13 +549,13 @@ void aes_decrypt_block(const uint8_t *input_block, uint8_t *output_block, const 
 
     // Initial round - just AddRoundKey with last round key
     printf("\nRound 0 (AddRoundKey):\n");
-    add_round_key(output_block, expanded_key + AES_128_ROUNDS * AES_BLOCK_SIZE);
+    add_round_key(output_block, expanded_key + rounds * AES_BLOCK_SIZE);
     print_state(output_block);
 
     // Main rounds in reverse
-    for (int round = AES_128_ROUNDS - 1; round > 0; round--)
+    for (int round = rounds - 1; round > 0; round--)
     {
-        printf("\nRound %d:\n", AES_128_ROUNDS - round);
+        printf("\nRound %d:\n", rounds - round);
 
         printf("After InvShiftRows:\n");
         inv_shift_rows(output_block);
