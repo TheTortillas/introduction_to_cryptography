@@ -142,15 +142,38 @@ uint32_t s_boxes(uint64_t expanded_xor);
 // Utility functions
 void print_binary(uint64_t num, int bits);
 void print_hex(uint64_t num);
+int parse_hex_blocks(const char *hex_string, uint64_t **blocks, size_t *num_blocks);
 
 int main()
 {
-    char plaintext[1024];
+    char input_text[1024];
     char key[1024];
+    int operation;
 
-    // Read plaintext using scanf with field width limit
-    printf("Enter plaintext: ");
-    scanf("%1023[^\n]", plaintext);
+    // Get operation choice from user
+    printf("Choose operation:\n");
+    printf("1. Encrypt\n");
+    printf("2. Decrypt\n");
+    printf("Enter choice (1 or 2): ");
+    scanf("%d", &operation);
+    getchar(); // Clear the newline from buffer
+
+    if (operation != 1 && operation != 2)
+    {
+        printf("Invalid choice. Please enter 1 for encryption or 2 for decryption.\n");
+        return 1;
+    }
+
+    // Read input text based on operation
+    if (operation == 1)
+    {
+        printf("Enter plaintext: ");
+    }
+    else
+    {
+        printf("Enter ciphertext (as hex, e.g., 0x123456789ABCDEF0, with a space between each encrypted block): ");
+    }
+    scanf("%1023[^\n]", input_text);
     getchar(); // Clear the newline from buffer
 
     // Read key using scanf with field width limit
@@ -183,65 +206,109 @@ int main()
         print_hex(subkeys[i]);
     }
 
-    // Calculate number of blocks needed for plaintext
-    size_t num_blocks = get_num_blocks(strlen(plaintext));
-    uint64_t *plaintext_blocks = malloc(num_blocks * sizeof(uint64_t));
-
-    // Convert plaintext to blocks
-    string_to_blocks(plaintext, plaintext_blocks, num_blocks);
-
-    // Print all plaintext blocks
-    printf("\nPlaintext Blocks:\n");
-    for (size_t i = 0; i < num_blocks; i++)
+    if (operation == 1)
     {
-        printf("\nBlock %zu:\n", i + 1);
-        printf("Binary: ");
-        print_binary(plaintext_blocks[i], 64);
-        printf("Hex: ");
-        print_hex(plaintext_blocks[i]);
-    }
+        // ENCRYPTION
+        printf("\n=== ENCRYPTION MODE ===\n");
 
-    // Encrypt each block
-    uint64_t *ciphertext_blocks = malloc(num_blocks * sizeof(uint64_t));
+        // Calculate number of blocks needed for plaintext
+        size_t num_blocks = get_num_blocks(strlen(input_text));
+        uint64_t *plaintext_blocks = malloc(num_blocks * sizeof(uint64_t));
 
-    printf("\nEncryption Process:\n");
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        printf("\nEncrypting Block %zu:\n", i + 1);
-        ciphertext_blocks[i] = des_encrypt(plaintext_blocks[i], subkeys);
+        // Convert plaintext to blocks
+        string_to_blocks(input_text, plaintext_blocks, num_blocks);
 
-        printf("\nCiphertext Block %zu:\n", i + 1);
-        printf("Binary: ");
-        print_binary(ciphertext_blocks[i], 64);
-        printf("Hex: ");
-        print_hex(ciphertext_blocks[i]);
-    }
-
-    // Decrypt each block to verify
-    printf("\nDecryption Process:\n");
-    for (size_t i = 0; i < num_blocks; i++)
-    {
-        printf("\nDecrypting Block %zu:\n", i + 1);
-        uint64_t decrypted = des_decrypt(ciphertext_blocks[i], subkeys);
-
-        printf("\nDecrypted Block %zu:\n", i + 1);
-        printf("Binary: ");
-        print_binary(decrypted, 64);
-        printf("Hex: ");
-        print_hex(decrypted);
-
-        // Convert back to characters and print
-        char decrypted_text[9];
-        for (int j = 0; j < 8; j++)
+        // Print all plaintext blocks
+        printf("\nPlaintext Blocks:\n");
+        for (size_t i = 0; i < num_blocks; i++)
         {
-            decrypted_text[j] = (decrypted >> (56 - j * 8)) & 0xFF;
+            printf("\nBlock %zu:\n", i + 1);
+            printf("Binary: ");
+            print_binary(plaintext_blocks[i], 64);
+            printf("Hex: ");
+            print_hex(plaintext_blocks[i]);
         }
-        decrypted_text[8] = '\0';
-        printf("Text: %s\n", decrypted_text);
-    }
 
-    free(plaintext_blocks);
-    free(ciphertext_blocks);
+        // Encrypt each block
+        uint64_t *ciphertext_blocks = malloc(num_blocks * sizeof(uint64_t));
+
+        printf("\nEncryption Process:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("\nEncrypting Block %zu:\n", i + 1);
+            ciphertext_blocks[i] = des_encrypt(plaintext_blocks[i], subkeys);
+
+            printf("\nCiphertext Block %zu:\n", i + 1);
+            printf("Binary: ");
+            print_binary(ciphertext_blocks[i], 64);
+            printf("Hex: ");
+            print_hex(ciphertext_blocks[i]);
+        }
+
+        printf("\n=== FINAL ENCRYPTED RESULT ===\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("Block %zu: ", i + 1);
+            print_hex(ciphertext_blocks[i]);
+        }
+
+        free(plaintext_blocks);
+        free(ciphertext_blocks);
+    }
+    else
+    {
+        // DECRYPTION
+        printf("\n=== DECRYPTION MODE ===\n");
+
+        // Parse hex input - can handle multiple blocks separated by spaces
+        uint64_t *ciphertext_blocks;
+        size_t num_blocks;
+
+        if (!parse_hex_blocks(input_text, &ciphertext_blocks, &num_blocks))
+        {
+            printf("Error: Invalid hex format. Please enter hex like: 123456789ABCDEF0 or multiple blocks separated by spaces\n");
+            return 1;
+        }
+
+        printf("\nCiphertext Blocks:\n");
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("\nBlock %zu:\n", i + 1);
+            printf("Binary: ");
+            print_binary(ciphertext_blocks[i], 64);
+            printf("Hex: ");
+            print_hex(ciphertext_blocks[i]);
+        }
+
+        // Decrypt each block
+        printf("\nDecryption Process:\n");
+        char *decrypted_text = malloc((num_blocks * 8 + 1) * sizeof(char));
+
+        for (size_t i = 0; i < num_blocks; i++)
+        {
+            printf("\nDecrypting Block %zu:\n", i + 1);
+            uint64_t decrypted = des_decrypt(ciphertext_blocks[i], subkeys);
+
+            printf("\nDecrypted Block %zu:\n", i + 1);
+            printf("Binary: ");
+            print_binary(decrypted, 64);
+            printf("Hex: ");
+            print_hex(decrypted);
+
+            // Convert back to characters
+            for (int j = 0; j < 8; j++)
+            {
+                decrypted_text[i * 8 + j] = (decrypted >> (56 - j * 8)) & 0xFF;
+            }
+        }
+        decrypted_text[num_blocks * 8] = '\0';
+
+        printf("\n=== FINAL DECRYPTED RESULT ===\n");
+        printf("Decrypted text: '%s'\n", decrypted_text);
+
+        free(ciphertext_blocks);
+        free(decrypted_text);
+    }
     return 0;
 }
 
@@ -367,8 +434,7 @@ void generate_subkeys(uint64_t key, uint64_t *subkeys)
 }
 
 // The main DES encryption function
-uint64_t 
-des_encrypt(uint64_t block, uint64_t *subkeys)
+uint64_t des_encrypt(uint64_t block, uint64_t *subkeys)
 {
     printf("\n--- ENCRYPTION PROCESS ---\n");
     printf("Step 1: Apply initial permutation (IP)\n");
@@ -547,4 +613,52 @@ uint32_t s_boxes(uint64_t expanded_xor)
     }
 
     return result;
+}
+
+// Parse hex string into blocks for decryption
+int parse_hex_blocks(const char *hex_string, uint64_t **blocks, size_t *num_blocks)
+{
+    // Count the number of hex values (separated by spaces or commas)
+    char *input_copy = strdup(hex_string);
+    char *token;
+    size_t count = 0;
+
+    // First pass: count tokens
+    char *temp_copy = strdup(hex_string);
+    token = strtok(temp_copy, " ,\t\n");
+    while (token != NULL)
+    {
+        count++;
+        token = strtok(NULL, " ,\t\n");
+    }
+    free(temp_copy);
+
+    if (count == 0)
+    {
+        free(input_copy);
+        return 0;
+    }
+
+    // Allocate memory for blocks
+    *blocks = malloc(count * sizeof(uint64_t));
+    *num_blocks = count;
+
+    // Second pass: parse values
+    size_t i = 0;
+    token = strtok(input_copy, " ,\t\n");
+    while (token != NULL && i < count)
+    {
+        if (sscanf(token, "%lx", &(*blocks)[i]) != 1)
+        {
+            printf("Error parsing hex value: %s\n", token);
+            free(input_copy);
+            free(*blocks);
+            return 0;
+        }
+        i++;
+        token = strtok(NULL, " ,\t\n");
+    }
+
+    free(input_copy);
+    return 1;
 }
