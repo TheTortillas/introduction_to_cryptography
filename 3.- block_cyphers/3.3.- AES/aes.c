@@ -60,12 +60,15 @@ static const uint8_t inv_s_box[256] = {
     0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d};
 
 // Round constants for key expansion
-static const uint8_t rcon[11] = {
-    0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36};
+static const uint8_t rcon[16] = {
+    0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40,
+    0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a};
 
 // Function prototypes
 // Key expansion
 void key_expansion(const uint8_t *key, uint8_t *expanded_key, int key_size, int rounds);
+void g_function(uint8_t *word, int round_constant_index);
+void h_function(uint8_t *word);
 
 // AES core transformations
 void sub_bytes(uint8_t *state);
@@ -281,62 +284,134 @@ void print_state(const uint8_t *state)
     }
 }
 
-// Key expansion routine - modified to handle different key sizes
+// Key expansion routine - following the notation from "Understanding Cryptography" by Christof Paar
 void key_expansion(const uint8_t *key, uint8_t *expanded_key, int key_size, int rounds)
 {
-    // First round key is the original key
+    int Nk = key_size / 4; // Number of 32-bit words in key (4 for AES-128, 6 for AES-192, 8 for AES-256)
+    int Nr = rounds;       // Number of rounds (10 for AES-128, 12 for AES-192, 14 for AES-256)
+    int Nb = 4;            // Number of columns in state (always 4 for AES)
+
+    // Copy the input key to the first Nk words of the expanded key
     memcpy(expanded_key, key, key_size);
 
-    uint8_t temp[4];
-    int i = key_size / 4; // Number of 32-bit words in key
-    int N = key_size / 4; // Used to track key schedule
-    int rcon_index = 1;   // Round constant index
+    printf("\nKey Expansion Process:\n");
 
-    // Generate the remaining round keys
-    while (i < 4 * (rounds + 1))
+    int i = Nk;
+    uint8_t temp[4];
+
+    // Generate the remaining words
+    while (i < Nb * (Nr + 1))
     {
-        // Last 4 bytes of previous word
+        // Copy previous word
         for (int j = 0; j < 4; j++)
         {
             temp[j] = expanded_key[(i - 1) * 4 + j];
         }
 
-        // Every N words, apply key schedule core
-        if (i % N == 0)
-        {
-            // RotWord - rotate left one byte
-            uint8_t k = temp[0];
-            temp[0] = temp[1];
-            temp[1] = temp[2];
-            temp[2] = temp[3];
-            temp[3] = k;
-
-            // SubWord - apply S-box
-            for (int j = 0; j < 4; j++)
-            {
-                temp[j] = s_box[temp[j]];
-            }
-
-            // XOR with round constant
-            temp[0] ^= rcon[rcon_index++];
-        }
-        // For AES-256, if index mod 8 = 4, apply SubWord
-        else if (key_size == AES_256_KEY_SIZE && i % N == 4)
-        {
-            // SubWord
-            for (int j = 0; j < 4; j++)
-            {
-                temp[j] = s_box[temp[j]];
-            }
-        }
-
-        // XOR with word N positions earlier
+        printf("W[%d-1] = ", i);
         for (int j = 0; j < 4; j++)
         {
-            expanded_key[i * 4 + j] = expanded_key[(i - N) * 4 + j] ^ temp[j];
+            printf("%02X ", temp[j]);
         }
+        printf("\n");
+
+        if (i % Nk == 0)
+        {
+            // Apply g function: RotWord, SubWord, and XOR with round constant
+            printf("Applying g-function to W[%d-1]\n", i);
+            g_function(temp, i / Nk);
+
+            printf("g(W[%d-1]) = ", i);
+            for (int j = 0; j < 4; j++)
+            {
+                printf("%02X ", temp[j]);
+            }
+            printf("\n");
+        }
+        // For AES-256, if index mod 8 = 4, apply h-function (SubWord)
+        else if (Nk > 6 && i % Nk == 4)
+        {
+            // Apply h function (just SubWord for AES-256)
+            printf("Applying h-function to W[%d-1]\n", i);
+            h_function(temp);
+
+            printf("h(W[%d-1]) = ", i);
+            for (int j = 0; j < 4; j++)
+            {
+                printf("%02X ", temp[j]);
+            }
+            printf("\n");
+        }
+
+        // XOR with word Nk positions earlier
+        printf("W[%d] = W[%d-%d] XOR ", i, i, Nk);
+        if (i % Nk == 0)
+        {
+            printf("g(W[%d-1])\n", i);
+        }
+        else if (Nk > 6 && i % Nk == 4)
+        {
+            printf("h(W[%d-1])\n", i);
+        }
+        else
+        {
+            printf("W[%d-1]\n", i);
+        }
+
+        for (int j = 0; j < 4; j++)
+        {
+            expanded_key[i * 4 + j] = expanded_key[(i - Nk) * 4 + j] ^ temp[j];
+        }
+
+        printf("W[%d] = ", i);
+        for (int j = 0; j < 4; j++)
+        {
+            printf("%02X ", expanded_key[i * 4 + j]);
+        }
+        printf("\n\n");
+
         i++;
     }
+}
+
+// g-function: RotWord + SubWord + Rcon
+void g_function(uint8_t *word, int round_constant_index)
+{
+    // Step 1: RotWord - rotate left by one byte
+    uint8_t temp = word[0];
+    word[0] = word[1];
+    word[1] = word[2];
+    word[2] = word[3];
+    word[3] = temp;
+
+    printf("  After RotWord: %02X %02X %02X %02X\n", word[0], word[1], word[2], word[3]);
+
+    // Step 2: SubWord - apply S-box to each byte
+    for (int j = 0; j < 4; j++)
+    {
+        word[j] = s_box[word[j]];
+    }
+
+    printf("  After SubWord: %02X %02X %02X %02X\n", word[0], word[1], word[2], word[3]);
+
+    // Step 3: XOR with round constant on first byte
+    word[0] ^= rcon[round_constant_index];
+
+    printf("  After XOR with Rcon[%d]=%02X: %02X %02X %02X %02X\n",
+           round_constant_index, rcon[round_constant_index],
+           word[0], word[1], word[2], word[3]);
+}
+
+// h-function: Just SubWord - used only in AES-256
+void h_function(uint8_t *word)
+{
+    // SubWord - apply S-box to each byte
+    for (int j = 0; j < 4; j++)
+    {
+        word[j] = s_box[word[j]];
+    }
+
+    printf("  After SubWord: %02X %02X %02X %02X\n", word[0], word[1], word[2], word[3]);
 }
 
 // SubBytes transformation - replaces each byte using the S-box
